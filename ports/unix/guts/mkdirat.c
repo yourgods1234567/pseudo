@@ -6,11 +6,14 @@
  * wrap_mkdirat(int dirfd, const char *path, mode_t mode) {
  *	int rc = -1;
  */
+	/* mask out mode bits appropriately */
+	mode = mode & ~pseudo_umask;
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
 	if (dirfd != AT_FDCWD) {
 		errno = ENOSYS;
 		return -1;
 	}
+
 	rc = real_mkdir(path, PSEUDO_FS_MODE(mode, 1));
 #else
 	rc = real_mkdirat(dirfd, path, PSEUDO_FS_MODE(mode, 1));
