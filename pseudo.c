@@ -497,6 +497,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 	int found_path = 0, found_ino = 0;
 	int prefer_ino = 0;
 	int xattr_flags = 0;
+	int trailing_slash = 0, old_trailing_slash = 0;
 
 	if (!msg)
 		return 1;
@@ -556,10 +557,30 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 	msg_header = *msg;
 	by_ino = msg_header;
 
+	/* trailing slashes are kept in paths because they affect
+	 * path resolution, but we don't want them in the database
+	 * because they're optional. For now, any error-checking on
+	 * this server-side is purely advisory, but the client should
+	 * bail with ENOTDIR a lot earlier in many cases, before the
+	 * server even sees anything.
+	 */
+	if (msg->pathlen) {
+		if (msg->path[msg->pathlen - 1] == '/') {
+			msg->path[--msg->pathlen] = '\0';
+			trailing_slash = 1;
+		}
+	}
+
+	if (oldpathlen > 0) {
+		if (oldpath[oldpathlen - 1] == '/') {
+			oldpath[--oldpathlen] = '\0';
+			old_trailing_slash = 1;
+		}
+	}
+
 	/* There should usually be a path.  Even for f* ops, the client
 	 * tries to provide a path from its table of known fd paths.
 	 */
-
 	/* Lookup the full path, with inode and dev if available */
 	if (msg->pathlen && msg->dev && msg->ino) {
 		if (!pdb_find_file_exact(msg, &row)) {
@@ -660,6 +681,11 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			/* unlink everything with this inode */
 			pdb_unlink_file_dev(&by_path);
 			found_path = 0;
+		}
+		if (!!S_ISDIR(by_path.mode) != trailing_slash) {
+			pseudo_diag("dir quasi-mismatch: '%s' [%llu] db mode 0%o, incoming path had trailing slash. Not unlinking.\n",
+				msg->path, (unsigned long long) by_path.ino,
+				(int) by_path.mode);
 		}
 	}
 

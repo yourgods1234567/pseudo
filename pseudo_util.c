@@ -624,12 +624,17 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 	char *newpath;
 	char *current;
 	char *effective_root;
+	int trailing_slash = 0;
 	
 	if (!path) {
 		pseudo_diag("can't fix empty path.\n");
 		return 0;
 	}
 	pathlen = strlen(path);
+	/* a trailing slash has special meaning */
+	if (pathlen > 0 && path[pathlen - 1] == '/') {
+		trailing_slash = 1;
+	}
 	newpathlen = pathlen;
         /* If the path starts with /, we don't care about base, UNLESS
          * rootlen is non-zero, in which case we're doing a chroot thing
@@ -667,7 +672,7 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 	 */
 	if (pseudo_append_elements(&newpath, &effective_root, &newpathlen, &current, path, pathlen, leave_last) != -1) {
 		--current;
-		if (*current == '/' && current > effective_root) {
+		if (*current == '/' && current > effective_root && !trailing_slash) {
 			*current = '\0';
 		}
 		pseudo_debug(PDBGF_PATH, "%s + %s => <%s>\n",
