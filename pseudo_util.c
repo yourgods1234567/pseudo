@@ -1269,7 +1269,7 @@ FILE *pseudo_host_etc_group_file = &pseudo_fake_group_file;
 #endif
 
 int
-pseudo_etc_file(const char *file, char *realname, int flags, char *search_dirs[], int dircount) {
+pseudo_etc_file(const char *file, char *realname, int flags, const char **search_dirs, int dircount) {
 	char filename[pseudo_path_max()];
 	int rc = -1;
 
@@ -1285,7 +1285,7 @@ pseudo_etc_file(const char *file, char *realname, int flags, char *search_dirs[]
 		return -1;
 	}
 	for (i = 0; i < dircount; ++i) {
-		char *s = search_dirs[i];
+		const char *s = search_dirs[i];
 		if (!s)
 			continue;
 #if PSEUDO_PORT_DARWIN

@@ -1,3 +1,12 @@
+2015-01-14:
+	* (seebs) Merge pabigot's fix for a missing antimagic() in
+	  etc_file code.
+	* (seebs) Make configure reject a "prefix" of the current
+	  directory. It fails in strange ways and is easy to detect.
+	* (seebs) handle colon-separated lists in PSEUDO_PASSWD.
+	  Derived in part from contribution from pabigot.
+	* (seebs) change allocation order in password file locking.
+
 2015-01-05:
 	* (seebs) First try at handling trailing slashes in path names
 	  correctly. (Which is to say, a trailing slash on a file name

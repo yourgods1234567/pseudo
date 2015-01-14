@@ -2,7 +2,7 @@
 #
 # configure, simulation of autoconf script, much simplified
 #
-# Copyright (c) 2008-2013 Wind River Systems, Inc.
+# Copyright (c) 2008-2014 Wind River Systems, Inc.
 #
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the Lesser GNU General Public License version 2.1 as
@@ -69,6 +69,10 @@ do
     --)    shift; break ;;
     --prefix=*)
         opt_prefix=${arg#--prefix=}
+	if [ "$(cd "$opt_prefix"; pwd)" == "$(pwd)" ]; then
+		echo >&2 "ERROR: Prefix is current directory. That doesn't work."
+		exit 1
+	fi
         ;;
     --libdir=*)
         opt_libdir=${arg#--libdir=}

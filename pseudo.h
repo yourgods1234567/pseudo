@@ -86,7 +86,7 @@ extern int pseudo_logfile(char *defname);
 extern ssize_t pseudo_sys_path_max(void);
 extern ssize_t pseudo_path_max(void);
 #define PSEUDO_PWD_MAX 4096
-extern int pseudo_etc_file(const char *filename, char *realname, int flags, char *path[], int dircount);
+extern int pseudo_etc_file(const char *filename, char *realname, int flags, const char **search_dirs, int dircount);
 extern void pseudo_stat32_from64(struct stat *, const struct stat64 *);
 extern void pseudo_stat64_from32(struct stat64 *, const struct stat *);
 

@@ -75,6 +75,8 @@ int pseudo_umask = 022;
 
 static char **fd_paths = NULL;
 static int nfds = 0;
+static const char **passwd_paths = NULL;
+static int npasswd_paths = 0;
 static int messages = 0;
 static struct timeval message_time = { .tv_sec = 0 };
 static int pseudo_inited = 0;
@@ -93,7 +95,7 @@ gid_t pseudo_egid;
 gid_t pseudo_sgid;
 gid_t pseudo_fgid;
 
-#define PSEUDO_ETC_FILE(filename, realname, flags) pseudo_etc_file(filename, realname, flags, (char *[]) { pseudo_chroot, pseudo_passwd, PSEUDO_PASSWD_FALLBACK }, PSEUDO_PASSWD_FALLBACK ? 3 : 2)
+#define PSEUDO_ETC_FILE(filename, realname, flags) pseudo_etc_file(filename, realname, flags, passwd_paths, npasswd_paths)
 
 /* helper function to make a directory, just like mkdir -p.
  * Can't use system() because the child shell would end up trying
@@ -115,6 +117,61 @@ mkdir_p(char *path) {
 		}
 	}
 	(void) mkdir(path, 0755);
+}
+
+static int
+build_passwd_paths(void)
+{
+	int np = 0;
+	
+	/* determine how many we need */
+	if (pseudo_chroot) {
+		++np;
+	}
+	if (pseudo_passwd) {
+		++np;
+		for (int i = 0; pseudo_passwd[i]; ++i)
+			if (pseudo_passwd[i] == ':')
+				++np;
+	}
+	if (PSEUDO_PASSWD_FALLBACK) {
+		++np;
+	}
+
+	npasswd_paths = np;
+	passwd_paths = malloc((np + 1) * sizeof(*passwd_paths));
+	if (!passwd_paths) {
+		pseudo_diag("couldn't allocate storage for password paths.\n");
+		exit(1);
+	}
+	np = 0;
+#define SHOW_PATH pseudo_debug(PDBGF_CHROOT | PDBGF_VERBOSE, "passwd_paths[%d]: '%s'\n", (np - 1), (passwd_paths[np - 1]))
+	if (pseudo_chroot) {
+		passwd_paths[np++] = pseudo_chroot;
+		SHOW_PATH;
+	}
+	if (pseudo_passwd) {
+		passwd_paths[np++] = pseudo_passwd;
+		SHOW_PATH;
+		for (int i = 0; pseudo_passwd[i]; ++i) {
+			if (pseudo_passwd[i] == ':') {
+				pseudo_passwd[i] = '\0';
+				passwd_paths[np++] = pseudo_passwd + i + 1;
+				SHOW_PATH;
+			}
+		}
+	}
+	if (PSEUDO_PASSWD_FALLBACK) {
+		passwd_paths[np++] = PSEUDO_PASSWD_FALLBACK;
+		SHOW_PATH;
+	}
+	passwd_paths[np] = NULL;
+	if (np != npasswd_paths) {
+		pseudo_diag("uh-oh, expected %d path(s) for passwd files, found %d.\n",
+			npasswd_paths, np);
+	}
+	
+	return np;
 }
 
 void
@@ -325,9 +382,12 @@ pseudo_init_client(void) {
 
 		env = pseudo_get_value("PSEUDO_PASSWD");
 		if (env) {
+			/* note: this means that pseudo_passwd is a
+			 * string we're allowed to modify... */
 			pseudo_passwd = strdup(env);
 		}
 		free(env);
+		build_passwd_paths();
 
 		pseudo_inited = 1;
 	}
@@ -408,6 +468,7 @@ pseudo_file_open(char *name, int *fd, FILE **fp) {
  */
 int
 pseudo_pwd_lck_open(void) {
+	pseudo_pwd_lck_close();
 	if (!pseudo_pwd_lck_name) {
 		pseudo_pwd_lck_name = malloc(pseudo_path_max());
 		if (!pseudo_pwd_lck_name) {
@@ -415,21 +476,24 @@ pseudo_pwd_lck_open(void) {
 			return -1;
 		}
 	}
-	pseudo_pwd_lck_close();
+	pseudo_antimagic();
 	pseudo_pwd_lck_fd = PSEUDO_ETC_FILE(".pwd.lock",
 					pseudo_pwd_lck_name, O_RDWR | O_CREAT);
+	pseudo_magic();
 	return pseudo_pwd_lck_fd;
 }
 
 int
 pseudo_pwd_lck_close(void) {
 	if (pseudo_pwd_lck_fd != -1) {
+		pseudo_antimagic();
 		close(pseudo_pwd_lck_fd);
 		if (pseudo_pwd_lck_name) {
 			unlink(pseudo_pwd_lck_name);
 			free(pseudo_pwd_lck_name);
 			pseudo_pwd_lck_name = 0;
 		}
+		pseudo_magic();
 		pseudo_pwd_lck_fd = -1;
 		return 0;
 	} else {
