@@ -1,3 +1,7 @@
+2015-01-15:
+	* (seebs) Rework PSEUDO_PASSWD path allocation for clarity,
+	  I hope.
+
 2015-01-14:
 	* (seebs) Merge pabigot's fix for a missing antimagic() in
 	  etc_file code.

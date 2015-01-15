@@ -119,59 +119,71 @@ mkdir_p(char *path) {
 	(void) mkdir(path, 0755);
 }
 
-static int
+/* Populating an array of unknown size is one of my least favorite
+ * things. The idea here is to ensure that the logic flow is the same
+ * both when counting expected items, and when populating them.
+ */
+static void
 build_passwd_paths(void)
 {
 	int np = 0;
+	int pass = 0;
 	
-	/* determine how many we need */
-	if (pseudo_chroot) {
-		++np;
-	}
-	if (pseudo_passwd) {
-		++np;
-		for (int i = 0; pseudo_passwd[i]; ++i)
-			if (pseudo_passwd[i] == ':')
-				++np;
-	}
-	if (PSEUDO_PASSWD_FALLBACK) {
-		++np;
+	/* should never happen... */
+	if (passwd_paths) {
+		free(passwd_paths);
+		passwd_paths = 0;
+		npasswd_paths = 0;
 	}
 
-	npasswd_paths = np;
-	passwd_paths = malloc((np + 1) * sizeof(*passwd_paths));
-	if (!passwd_paths) {
-		pseudo_diag("couldn't allocate storage for password paths.\n");
-		exit(1);
-	}
-	np = 0;
-#define SHOW_PATH pseudo_debug(PDBGF_CHROOT | PDBGF_VERBOSE, "passwd_paths[%d]: '%s'\n", (np - 1), (passwd_paths[np - 1]))
-	if (pseudo_chroot) {
-		passwd_paths[np++] = pseudo_chroot;
-		SHOW_PATH;
-	}
-	if (pseudo_passwd) {
-		passwd_paths[np++] = pseudo_passwd;
-		SHOW_PATH;
-		for (int i = 0; pseudo_passwd[i]; ++i) {
-			if (pseudo_passwd[i] == ':') {
-				pseudo_passwd[i] = '\0';
-				passwd_paths[np++] = pseudo_passwd + i + 1;
-				SHOW_PATH;
+#define SHOW_PATH pseudo_debug(PDBGF_CHROOT | PDBGF_VERBOSE, "passwd_paths[%d]: '%s'\n", np, (passwd_paths[np]))
+#define ADD_PATH(p) do { if (passwd_paths) { passwd_paths[np] = (p); SHOW_PATH; } ++np; } while(0)
+#define NUL_BYTE(p) do { if (passwd_paths) { *(p)++ = '\0'; } else { ++(p); } } while(0)
+
+	do {
+		if (pseudo_chroot) {
+			ADD_PATH(pseudo_chroot);
+		}
+		if (pseudo_passwd) {
+			char *s = pseudo_passwd;
+			while (s) {
+				char *t = strchr(s, ':');
+				if (t) {
+					NUL_BYTE(t);
+				}
+				ADD_PATH(s);
+				s = t;
 			}
 		}
-	}
-	if (PSEUDO_PASSWD_FALLBACK) {
-		passwd_paths[np++] = PSEUDO_PASSWD_FALLBACK;
-		SHOW_PATH;
-	}
-	passwd_paths[np] = NULL;
-	if (np != npasswd_paths) {
-		pseudo_diag("uh-oh, expected %d path(s) for passwd files, found %d.\n",
-			npasswd_paths, np);
-	}
-	
-	return np;
+		if (PSEUDO_PASSWD_FALLBACK) {
+			ADD_PATH(PSEUDO_PASSWD_FALLBACK);
+		}
+
+		/* allocation and/or return */
+		if (passwd_paths) {
+			if (np != npasswd_paths) {
+				pseudo_diag("internal error: path allocation was inconsistent.\n");
+			} else {
+				/* yes, we allocated one extra for a trailing
+				 * null pointer.
+				 */
+				passwd_paths[np] = NULL;
+			}
+			return;
+		} else {
+			passwd_paths = malloc((np + 1) * sizeof(*passwd_paths));
+			npasswd_paths = np;
+			if (!passwd_paths) {
+				pseudo_diag("couldn't allocate storage for password paths.\n");
+				exit(1);
+			}
+			np = 0;
+		}
+	} while (++pass < 2);
+	/* in theory the second pass already returned, but. */
+	pseudo_diag("should totally not have gotten here.\n");
+
+	return;
 }
 
 void

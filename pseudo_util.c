@@ -1286,8 +1286,15 @@ pseudo_etc_file(const char *file, char *realname, int flags, const char **search
 	}
 	for (i = 0; i < dircount; ++i) {
 		const char *s = search_dirs[i];
+		/* we used to pass in some paths as NULL when unset,
+		 * so we skipped those. Now NULL entries don't get
+		 * put in, so the only NULL should be the sentinel
+		 * value, and this should never get hit.
+		 *
+		 * "should" is not comforting to me.
+		 */
 		if (!s)
-			continue;
+			break;
 #if PSEUDO_PORT_DARWIN
 		/* special magic: empty string implies our emulation
 		 * of the passwd/group files.
