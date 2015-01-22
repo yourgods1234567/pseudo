@@ -69,7 +69,12 @@ do
     --)    shift; break ;;
     --prefix=*)
         opt_prefix=${arg#--prefix=}
-	if [ "$(cd "$opt_prefix"; pwd)" == "$(pwd)" ]; then
+	if [ -d "$opt_prefix" ]; then
+		maybe_prefix=$(cd "$opt_prefix"; pwd)
+	else
+		maybe_prefix=$opt_prefix
+	fi
+	if [ "$maybe_prefix" == "$(pwd)" ]; then
 		echo >&2 "ERROR: Prefix is current directory. That doesn't work."
 		exit 1
 	fi
