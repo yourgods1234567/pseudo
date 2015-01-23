@@ -1,5 +1,6 @@
 2015-01-22:
 	* (seebs) work when --prefix doesn't exist yet
+	* 1.6.4
 
 2015-01-15:
 	* (seebs) Rework PSEUDO_PASSWD path allocation for clarity,
