@@ -1,3 +1,7 @@
+2015-05-04:
+	* (seebs) don't give spurious trailing slash diagnostics
+	* 1.6.5
+
 2015-01-22:
 	* (seebs) work when --prefix doesn't exist yet
 	* 1.6.4

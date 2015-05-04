@@ -682,7 +682,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			pdb_unlink_file_dev(&by_path);
 			found_path = 0;
 		}
-		if (!!S_ISDIR(by_path.mode) != trailing_slash) {
+		if (trailing_slash && !S_ISDIR(by_path.mode)) {
 			pseudo_diag("dir quasi-mismatch: '%s' [%llu] db mode 0%o, incoming path had trailing slash. Not unlinking.\n",
 				msg->path, (unsigned long long) by_path.ino,
 				(int) by_path.mode);
