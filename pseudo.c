@@ -542,10 +542,20 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			oldpathlen = msg->pathlen - (oldpath - msg->path) - 1;
 			pseudo_debug(PDBGF_OP | PDBGF_FILE | PDBGF_XATTR, "%s: path '%s', oldpath '%s' [%d/%d]\n",
 				pseudo_op_name(msg->op), msg->path, oldpath, (int) oldpathlen, (int) msg->pathlen);
+			/* For a rename op, we want to strip any trailing
+			 * slashes. For xattr, "oldpath" is the raw data
+			 * to be stored. */
+			if (oldpathlen > 0 && msg->op == OP_RENAME) {
+				if (oldpath[oldpathlen - 1] == '/') {
+					oldpath[--oldpathlen] = '\0';
+					old_trailing_slash = 1;
+				}
+			}
 			/* if we got an oldpath, but a 0-length initial
 			 * path, we don't want to act as though we had
 			 * a non-empty initial path.
 			 */
+
 			msg->pathlen = initial_len;
 			break;
 		default:
@@ -568,13 +578,6 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		if (msg->path[msg->pathlen - 1] == '/') {
 			msg->path[--msg->pathlen] = '\0';
 			trailing_slash = 1;
-		}
-	}
-
-	if (oldpathlen > 0) {
-		if (oldpath[oldpathlen - 1] == '/') {
-			oldpath[--oldpathlen] = '\0';
-			old_trailing_slash = 1;
 		}
 	}
 
