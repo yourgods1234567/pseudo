@@ -1,6 +1,7 @@
 2015-07-16:
 	* (seebs) don't truncate xattr attributes that end with a slash.
 	* (seebs) allow actually making fifos
+	* 1.6.6
 
 2015-05-04:
 	* (seebs) don't give spurious trailing slash diagnostics
