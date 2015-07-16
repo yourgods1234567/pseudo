@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2011 Wind River Systems; see
+ * Copyright (c) 2011,2015 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
  * int mknodat(int dirfd, const char *path, mode_t mode, dev_t dev)
@@ -28,11 +28,19 @@
 		return -1;
 	}
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
-	rc = real_open(path, O_CREAT | O_WRONLY | O_EXCL,
-		PSEUDO_FS_MODE(mode, 0));
+	if (S_ISFIFO(mode)) {
+		rc = real_mkfifo(path, PSEUDO_FS_MODE(mode, 0));
+	} else {
+		rc = real_open(path, O_CREAT | O_WRONLY | O_EXCL,
+			PSEUDO_FS_MODE(mode, 0));
+	}
 #else
-	rc = real_openat(dirfd, path, O_CREAT | O_WRONLY | O_EXCL,
-		PSEUDO_FS_MODE(mode, 0));
+	if (S_ISFIFO(mode)) {
+		rc = real_mkfifoat(dirfd, path, PSEUDO_FS_MODE(mode, 0));
+	} else {
+		rc = real_openat(dirfd, path, O_CREAT | O_WRONLY | O_EXCL,
+			PSEUDO_FS_MODE(mode, 0));
+	}
 #endif
 	if (rc == -1) {
 		return -1;
