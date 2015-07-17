@@ -1,3 +1,7 @@
+2015-07-17:
+	* (seebs) allow actually making fifos without randomly closing fd 0
+	* 1.6.7
+
 2015-07-16:
 	* (seebs) don't truncate xattr attributes that end with a slash.
 	* (seebs) allow actually making fifos
