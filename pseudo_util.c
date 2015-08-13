@@ -66,6 +66,9 @@ static struct pseudo_variables pseudo_env[] = {
 	{ "PSEUDO_DISABLED", 15, NULL },
 	{ "PSEUDO_UNLOAD", 13, NULL },
 	{ "PSEUDO_ALLOW_FSYNC", 18, NULL },
+#ifdef PSEUDO_PROFILING
+	{ "PSEUDO_PROFILE_PATH", 19, NULL },
+#endif
 	{ NULL, 0, NULL } /* Magic terminator */
 };
 

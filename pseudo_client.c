@@ -77,8 +77,12 @@ static char **fd_paths = NULL;
 static int nfds = 0;
 static const char **passwd_paths = NULL;
 static int npasswd_paths = 0;
-static int messages = 0;
-static struct timeval message_time = { .tv_sec = 0 };
+#ifdef PSEUDO_PROFILING
+int pseudo_profile_fd = -1;
+static int profile_interval = 1;
+static int messages = 0, total_ops = 0, processes = 1;
+static struct timeval total_time = { .tv_sec = 0 }, ipc_time = { .tv_sec = 0 };
+#endif
 static int pseudo_inited = 0;
 
 static int sent_messages = 0;
@@ -186,6 +190,93 @@ build_passwd_paths(void)
 	return;
 }
 
+#ifdef PSEUDO_PROFILING
+static void
+pseudo_profile_start(void) {
+	/* We use -1 as a starting value, and -2 as a value
+	 * indicating not to try to open it.
+	 */
+	if (pseudo_profile_fd == -1) {
+		int fd = -2;
+		char *profile_path = pseudo_get_value("PSEUDO_PROFILE_PATH");
+		if (profile_path) {
+			fd = open(profile_path, O_RDWR | O_CREAT, 0600);
+			if (fd >= 0) {
+				fd = pseudo_fd(fd, MOVE_FD);
+			}
+			if (fd < 0) {
+				fd = -2;
+			} else {
+				int pid = getpid();
+				processes = 1;
+				total_ops = 0;
+				messages = 0;
+				total_time = (struct timeval) { .tv_sec = 0 };
+				ipc_time = (struct timeval) { .tv_sec = 0 };
+				if (pid > 0) {
+					pseudo_profile_t data;
+					int rc;
+
+					rc = lseek(fd, pid * sizeof(data), SEEK_SET);
+					if (rc == 0) {
+						rc = read(fd, &data, sizeof(data));
+						/* cumulative with other values in same file */
+						if (rc == sizeof(data)) {
+							processes = data.processes + 1;
+							total_ops = data.total_ops;
+							messages = data.messages;
+							total_time = data.total_time;
+							ipc_time = data.ipc_time;
+						}
+						profile_interval = 1;
+					}
+				}
+			}
+		}
+		pseudo_profile_fd = fd;
+	}
+}
+
+static inline void
+fix_tv(struct timeval *tv) {
+	if (tv->tv_usec > 1000000) {
+		tv->tv_sec += tv->tv_usec / 1000000;
+		tv->tv_usec %= 1000000;
+	} else if (tv->tv_usec < 0) {
+		/* C99 and later guarantee truncate-towards-zero.
+		 * We want -1 through -1000000 usec to produce
+		 * -1 seconds, etcetera. Note that sec is
+		 * negative, so yes, we want to add to tv_sec and
+		 * subtract from tv_usec.
+		 */
+		int sec = (tv->tv_usec - 999999) / 1000000;
+		tv->tv_sec += sec;
+		tv->tv_usec -= 1000000 * sec;
+	}
+}
+
+static void
+pseudo_profile_report(void) {
+	if (pseudo_profile_fd < 0) {
+		return;
+	}
+	fix_tv(&total_time);
+	fix_tv(&ipc_time);
+	int pid = getpid();
+	if (pid >= 0) {
+		pseudo_profile_t data = {
+			.processes = processes,
+			.total_ops = total_ops,
+			.messages = messages,
+			.total_time = total_time,
+			.ipc_time = ipc_time
+		};
+		lseek(pseudo_profile_fd, pid * sizeof(data), SEEK_SET);
+		write(pseudo_profile_fd, &data, sizeof(data));
+	}
+}
+#endif
+
 void
 pseudo_init_client(void) {
 	char *env;
@@ -196,6 +287,12 @@ pseudo_init_client(void) {
 		close(connect_fd);
 		connect_fd = -1;
 	}
+#ifdef PSEUDO_PROFILING
+	if (pseudo_profile_fd != -1) {
+		close(pseudo_profile_fd);
+		pseudo_profile_fd = -1;
+	}
+#endif
 
 	/* in child processes, PSEUDO_DISABLED may have become set to
 	 * some truthy value, in which case we'd disable pseudo,
@@ -403,8 +500,12 @@ pseudo_init_client(void) {
 
 		pseudo_inited = 1;
 	}
-	if (!pseudo_disabled)
+	if (!pseudo_disabled) {
 		pseudo_client_getcwd();
+#ifdef PSEUDO_PROFILING
+		pseudo_profile_start();
+#endif
+	}
 
 	pseudo_magic();
 }
@@ -1151,7 +1252,12 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	static char *alloced_path = 0;
 	static size_t alloced_len = 0;
 	int strip_slash;
+#ifdef PSEUDO_PROFILING
+	struct timeval tv1_total, tv2_total;
 
+	gettimeofday(&tv1_total, NULL);
+	++total_ops;
+#endif
 	/* disable wrappers */
 	pseudo_antimagic();
 
@@ -1413,28 +1519,27 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		break;
 	}
 	if (do_request) {
-		struct timeval tv1, tv2;
+#ifdef PSEUDO_PROFILING
+		struct timeval tv1_ipc, tv2_ipc;
+#endif
                 if (!pseudo_op_wait(msg.op))
                         msg.type = PSEUDO_MSG_FASTOP;
 		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sending request [ino %llu]\n", (unsigned long long) msg.ino);
-		gettimeofday(&tv1, NULL);
+#ifdef PSEUDO_PROFILING
+		gettimeofday(&tv1_ipc, NULL);
+#endif
 		if (pseudo_local_only) {
 			/* disable server */
 			result = NULL;
 		} else {
 			result = pseudo_client_request(&msg, pathlen, path);
 		}
-		gettimeofday(&tv2, NULL);
+#ifdef PSEUDO_PROFILING
+		gettimeofday(&tv2_ipc, NULL);
 		++messages;
-		message_time.tv_sec += (tv2.tv_sec - tv1.tv_sec);
-		message_time.tv_usec += (tv2.tv_usec - tv1.tv_usec);
-		if (message_time.tv_usec < 0) {
-			message_time.tv_usec += 1000000;
-			--message_time.tv_sec;
-		} else while (message_time.tv_usec > 1000000) {
-			message_time.tv_usec -= 1000000;
-			++message_time.tv_sec;
-		}
+		ipc_time.tv_sec += (tv2_ipc.tv_sec - tv1_ipc.tv_sec);
+		ipc_time.tv_usec += (tv2_ipc.tv_usec - tv1_ipc.tv_usec);
+#endif
 		if (result) {
 			pseudo_debug(PDBGF_OP, "(%d) %s", getpid(), pseudo_res_name(result->result));
 			if (op == OP_STAT || op == OP_FSTAT) {
@@ -1458,12 +1563,17 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	}
 	pseudo_debug(PDBGF_OP, "\n");
 
-	if (do_request && (messages % 1000 == 0)) {
-		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE | PDBGF_BENCHMARK, "%d messages handled in %.4f seconds\n",
-			messages,
-			(double) message_time.tv_sec +
-			(double) message_time.tv_usec / 1000000.0);
+#ifdef PSEUDO_PROFILING
+	gettimeofday(&tv2_total, NULL);
+	total_time.tv_sec += (tv2_total.tv_sec - tv1_total.tv_sec);
+	total_time.tv_usec += (tv2_total.tv_usec - tv1_total.tv_usec);
+	if (total_ops % profile_interval == 0) {
+		pseudo_profile_report();
+		if (profile_interval < 100) {
+			profile_interval = profile_interval * 10;
+		}
 	}
+#endif
 	/* reenable wrappers */
 	pseudo_magic();
 

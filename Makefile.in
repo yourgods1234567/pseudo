@@ -26,6 +26,7 @@ SQLITE_LIB=@SQLITE_LIB@
 SQLITE_MEMORY=@SQLITE_MEMORY@
 FORCE_ASYNC=@FORCE_ASYNC@
 XATTR=@XATTR@
+PROFILING=$(if $(filter true,@PROFILING@),-DPSEUDO_PROFILING)
 PASSWD_FALLBACK=@PASSWD_FALLBACK@
 BITS=@BITS@
 ARCH_FLAGS=@ARCH_FLAGS@
@@ -41,7 +42,7 @@ LOCALSTATEDIR=$(PREFIX)/$(LOCALSTATE)
 
 CFLAGS_BASE=-pipe -std=gnu99 -Wall -W -Wextra
 CFLAGS_CODE=-fPIC -D_LARGEFILE64_SOURCE -D_ATFILE_SOURCE $(ARCH_FLAGS)
-CFLAGS_DEFS=-DPSEUDO_PREFIX='"$(PREFIX)"' -DPSEUDO_SUFFIX='"$(SUFFIX)"' -DPSEUDO_BINDIR='"$(BIN)"' -DPSEUDO_LIBDIR='"$(LIB)"' -DPSEUDO_LOCALSTATEDIR='"$(LOCALSTATE)"' -DPSEUDO_VERSION='"$(VERSION)"' $(SQLITE_MEMORY) $(FORCE_ASYNC) -DPSEUDO_PASSWD_FALLBACK='$(PASSWD_FALLBACK)'
+CFLAGS_DEFS=-DPSEUDO_PREFIX='"$(PREFIX)"' -DPSEUDO_SUFFIX='"$(SUFFIX)"' -DPSEUDO_BINDIR='"$(BIN)"' -DPSEUDO_LIBDIR='"$(LIB)"' -DPSEUDO_LOCALSTATEDIR='"$(LOCALSTATE)"' -DPSEUDO_VERSION='"$(VERSION)"' $(SQLITE_MEMORY) $(FORCE_ASYNC) -DPSEUDO_PASSWD_FALLBACK='$(PASSWD_FALLBACK)' $(PROFILING)
 CFLAGS_DEBUG=-O2 -g
 @DEFAULT_SQLITE@CFLAGS_SQL=-L$(SQLITE)/$(SQLITE_LIB) -I$(SQLITE)/include $(RPATH)
 CFLAGS_PSEUDO=$(CFLAGS_BASE) $(CFLAGS_CODE) $(CFLAGS_DEFS) \
@@ -155,6 +156,9 @@ offsets32:
 offsets64:
 	$(CC) -m64 -o offsets64 offsets.c
 
+pseudo_profile: Makefile pseudo_profile.c
+	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o pseudo_profile pseudo_profile.c
+
 clean:
 	rm -f *.o *.so $(PSEUDO) $(PSEUDODB) $(PSEUDOLOG) \
 		pseudo_wrapfuncs.h pseudo_wrapfuncs.c \
@@ -162,6 +166,7 @@ clean:
 		pseudo_tables.c pseudo_tables.h \
 		pseudo_ports.h port_wrappers.c \
 		offsets32 offsets64 \
+		pseudo_profile \
 		port_deps.mk func_deps.mk
 	touch port_deps.mk func_deps.mk
 

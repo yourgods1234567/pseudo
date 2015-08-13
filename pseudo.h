@@ -152,4 +152,13 @@ round_up(size_t n, size_t block) {
 	return block * (((n + block / 4) / block) + 1);
 }
 
+#ifdef PSEUDO_PROFILING
+typedef struct {
+	int processes;
+	long long total_ops;
+	long long messages;
+	struct timeval total_time;
+	struct timeval ipc_time;
+} pseudo_profile_t;
+#endif
 #include "pseudo_ports.h"

@@ -583,6 +583,14 @@ This variable is automatically set by the
 .I pseudo
 program when it is used as a launcher.
 .TP 8
+.B PSEUDO_PROFILE_PATH
+If
+.I pseudo
+was configured with profiling enabled, specifies a path in which to
+write client profiling information for use with the
+.I pseudo_profile
+utility (not built by default).
+.TP 8
 .B PSEUDO_TAG
 If this variable is set in a client's environment, its value is
 communicated to the server at the beginning of each client session,
