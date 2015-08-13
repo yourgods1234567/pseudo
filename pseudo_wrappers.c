@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <dlfcn.h>
 
@@ -69,6 +70,21 @@ static sigset_t pseudo_saved_sigmask;
 static void _libpseudo_init(void) __attribute__ ((constructor));
 
 static int _libpseudo_initted = 0;
+
+#ifdef PSEUDO_PROFILING
+extern struct timeval *pseudo_wrapper_time;
+/* profiling shared postamble */
+#define PROFILE_START \
+	struct timeval tv1, tv2; \
+	do { gettimeofday(&tv1, NULL); } while(0)
+#define PROFILE_DONE do { \
+	gettimeofday(&tv2, NULL); \
+	pseudo_wrapper_time->tv_sec += tv2.tv_sec - tv1.tv_sec; \
+	pseudo_wrapper_time->tv_usec += tv2.tv_usec - tv1.tv_usec; } while(0)
+#else
+#define PROFILE_START do {} while(0)
+#define PROFILE_DONE do {} while(0)
+#endif
 
 static void
 _libpseudo_init(void) {

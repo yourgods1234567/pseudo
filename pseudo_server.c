@@ -1,6 +1,5 @@
 /*
  * pseudo_server.c, pseudo's server-side logic and message handling
-
  *
  * Copyright (c) 2008-2010, 2013 Wind River Systems, Inc.
  *

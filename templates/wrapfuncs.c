@@ -22,12 +22,14 @@ ${name}(${decl_args}) {
 	sigset_t saved;
 	${variadic_decl}
 	${rc_decl}
+	PROFILE_START;
 
 ${maybe_async_skip}
 
 	if (!pseudo_check_wrappers() || !real_$name) {
 		/* rc was initialized to the "failure" value */
 		pseudo_enosys("${name}");
+		PROFILE_DONE;
 		${rc_return}
 	}
 
@@ -36,6 +38,7 @@ ${maybe_async_skip}
 	if (pseudo_disabled) {
 		${rc_assign} (*real_${name})(${call_args});
 		${variadic_end}
+		PROFILE_DONE;
 		${rc_return}
 	}
 
@@ -46,6 +49,7 @@ ${maybe_async_skip}
 		errno = EBUSY;
 		sigprocmask(SIG_SETMASK, &saved, NULL);
 		pseudo_debug(PDBGF_WRAPPER, "${name} failed to get lock, giving EBUSY.\n");
+		PROFILE_DONE;
 		${def_return}
 	}
 
@@ -74,6 +78,7 @@ ${maybe_async_skip}
 #endif
 	pseudo_debug(PDBGF_WRAPPER, "wrapper completed: ${name} (errno: %d)\n", save_errno);
 	errno = save_errno;
+	PROFILE_DONE;
 	${rc_return}
 }
 

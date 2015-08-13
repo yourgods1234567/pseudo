@@ -6,6 +6,7 @@ pseudo_wrapper_table.c
 pseudo
 pseudodb
 pseudolog
+pseudo_profile
 pseudo_tables.c
 pseudo_tables.h
 port_wrappers.c

@@ -306,8 +306,10 @@ class Function:
         if self.async_skip:
 	    return """/* This function is not called if pseudo is configured --enable-force-async */
 #ifdef PSEUDO_FORCE_ASYNC
-	if (!pseudo_allow_fsync)
+	if (!pseudo_allow_fsync) {
+		PROFILE_DONE;
 		return %s;
+	}
 #endif
 """ % self.async_skip
         else:
@@ -579,6 +581,7 @@ def main(argv):
 
     for path in glob.glob('templates/*'):
         try:
+	    print "Considering template: " + path
             source = TemplateFile(path)
 	    if source.name.endswith('.c') or source.name.endswith('.h'):
                 source.emit('copyright')

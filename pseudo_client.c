@@ -77,8 +77,12 @@ static char **fd_paths = NULL;
 static int nfds = 0;
 static const char **passwd_paths = NULL;
 static int npasswd_paths = 0;
-static int messages = 0;
-static struct timeval message_time = { .tv_sec = 0 };
+#ifdef PSEUDO_PROFILING
+int pseudo_profile_fd = -1;
+static int profile_interval = 1;
+static pseudo_profile_t profile_data;
+struct timeval *pseudo_wrapper_time = &profile_data.wrapper_time;
+#endif
 static int pseudo_inited = 0;
 
 static int sent_messages = 0;
@@ -186,6 +190,123 @@ build_passwd_paths(void)
 	return;
 }
 
+#ifdef PSEUDO_PROFILING
+static int pseudo_profile_pid = -2;
+
+static void
+pseudo_profile_start(void) {
+	/* We use -1 as a starting value, and -2 as a value
+	 * indicating not to try to open it.
+	 */
+	int existing_data = 0;
+	int pid = getpid();
+	if (pseudo_profile_pid > 0 && pseudo_profile_pid != pid) {
+		/* looks like there's been a fork. We intentionally
+		 * abandon any existing stats, since the parent might
+		 * want to write them, and we want to combine with
+		 * any previous stats for this pid.
+		 */
+		close(pseudo_profile_fd);
+		pseudo_profile_fd = -1;
+	}
+	if (pseudo_profile_fd == -1) {
+		int fd = -2;
+		char *profile_path = pseudo_get_value("PSEUDO_PROFILE_PATH");
+		pseudo_profile_pid = pid;
+		if (profile_path) {
+			fd = open(profile_path, O_RDWR | O_CREAT, 0600);
+			if (fd >= 0) {
+				fd = pseudo_fd(fd, MOVE_FD);
+			}
+			if (fd < 0) {
+				fd = -2;
+			} else {
+				if (pid > 0) {
+					pseudo_profile_t data;
+					off_t rc;
+
+					rc = lseek(fd, pid * sizeof(data), SEEK_SET);
+					if (rc == (off_t) (pid * sizeof(data))) {
+						rc = read(fd, &profile_data, sizeof(profile_data));
+						/* cumulative with other values in same file */
+						if (rc == sizeof(profile_data)) {
+							pseudo_debug(PDBGF_PROFILE, "pid %d found existing profiling data.\n", pid);
+							existing_data = 1;
+							++profile_data.processes;
+						} else {
+							pseudo_debug(PDBGF_PROFILE, "read failed for pid %d: %d, %d\n", pid, (int) rc, errno);
+						}
+						profile_interval = 1;
+					}
+				}
+			}
+		}
+		pseudo_profile_fd = fd;
+	} else {
+		pseudo_debug(PDBGF_PROFILE, "_start called with existing fd? (pid %d)", (int) pseudo_profile_pid);
+		existing_data = 1;
+		++profile_data.processes;
+		profile_data.total_ops = 0;
+		profile_data.messages = 0;
+		profile_data.wrapper_time = (struct timeval) { .tv_sec = 0 };
+		profile_data.op_time = (struct timeval) { .tv_sec = 0 };
+		profile_data.ipc_time = (struct timeval) { .tv_sec = 0 };
+	}
+	if (!existing_data) {
+		pseudo_debug(PDBGF_PROFILE, "pid %d found no existing profiling data.\n", pid);
+		profile_data = (pseudo_profile_t) {
+			.processes = 1,
+			.total_ops = 0,
+			.messages = 0,
+			.wrapper_time = (struct timeval) { .tv_sec = 0 },
+			.op_time = (struct timeval) { .tv_sec = 0 },
+			.ipc_time = (struct timeval) { .tv_sec = 0 },
+		};
+	}
+}
+
+static inline void
+fix_tv(struct timeval *tv) {
+	if (tv->tv_usec > 1000000) {
+		tv->tv_sec += tv->tv_usec / 1000000;
+		tv->tv_usec %= 1000000;
+	} else if (tv->tv_usec < 0) {
+		/* C99 and later guarantee truncate-towards-zero.
+		 * We want -1 through -1000000 usec to produce
+		 * -1 seconds, etcetera. Note that sec is
+		 * negative, so yes, we want to add to tv_sec and
+		 * subtract from tv_usec.
+		 */
+		int sec = (tv->tv_usec - 999999) / 1000000;
+		tv->tv_sec += sec;
+		tv->tv_usec -= 1000000 * sec;
+	}
+}
+
+static int profile_reported = 0;
+static void
+pseudo_profile_report(void) {
+	if (pseudo_profile_fd < 0) {
+		return;
+	}
+	fix_tv(&profile_data.wrapper_time);
+	fix_tv(&profile_data.op_time);
+	fix_tv(&profile_data.ipc_time);
+	if (pseudo_profile_pid >= 0) {
+		int rc1, rc2;
+		rc1 = lseek(pseudo_profile_fd, pseudo_profile_pid * sizeof(profile_data), SEEK_SET);
+		rc2 = write(pseudo_profile_fd, &profile_data, sizeof(profile_data));
+		if (!profile_reported) {
+			pseudo_debug(PDBGF_PROFILE, "pid %d (%s) saving profiling info: %d, %d.\n",
+				pseudo_profile_pid,
+				program_invocation_name ? program_invocation_name : "unknown",
+				rc1, rc2);
+			profile_reported = 1;
+		}
+	}
+}
+#endif
+
 void
 pseudo_init_client(void) {
 	char *env;
@@ -196,6 +317,12 @@ pseudo_init_client(void) {
 		close(connect_fd);
 		connect_fd = -1;
 	}
+#ifdef PSEUDO_PROFILING
+	if (pseudo_profile_fd > -1) {
+		close(pseudo_profile_fd);
+	}
+	pseudo_profile_fd = -1;
+#endif
 
 	/* in child processes, PSEUDO_DISABLED may have become set to
 	 * some truthy value, in which case we'd disable pseudo,
@@ -268,7 +395,7 @@ pseudo_init_client(void) {
 	env = getenv("PSEUDO_UNLOAD");
 	if (env) {
 		pseudo_set_value("PSEUDO_UNLOAD", env);
-		pseudo_disabled=1;
+		pseudo_disabled = 1;
 	}
 
 	/* Setup global items needed for pseudo to function... */
@@ -403,8 +530,12 @@ pseudo_init_client(void) {
 
 		pseudo_inited = 1;
 	}
-	if (!pseudo_disabled)
+	if (!pseudo_disabled) {
 		pseudo_client_getcwd();
+#ifdef PSEUDO_PROFILING
+		pseudo_profile_start();
+#endif
+	}
 
 	pseudo_magic();
 }
@@ -1152,12 +1283,30 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	static size_t alloced_len = 0;
 	int strip_slash;
 
+#ifdef PSEUDO_PROFILING
+	struct timeval tv1_op, tv2_op;
+
+	gettimeofday(&tv1_op, NULL);
+	++profile_data.total_ops;
+#endif
 	/* disable wrappers */
 	pseudo_antimagic();
 
+	/* note: I am not entirely sure this should happen even if no
+	 * messages have actually been sent. */
 	if (!sent_messages) {
 		sent_messages = 1;
 		atexit(void_client_ping);
+	}
+
+	/* if path isn't available, try to find one? */
+	if (!path && fd >= 0 && fd <= nfds) {
+		path = fd_path(fd);
+		if (!path) {
+			pathlen = 0;
+		} else {
+			pathlen = strlen(path) + 1;
+		}
 	}
 
 	if (op == OP_RENAME) {
@@ -1206,16 +1355,6 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		va_end(ap);
 		pseudo_debug(PDBGF_XATTR, "%sxattr, name '%s'\n",
 			op == OP_GET_XATTR ? "get" : "remove", path_extra_1);
-	}
-
-	/* if path isn't available, try to find one? */
-	if (!path && fd >= 0 && fd <= nfds) {
-		path = fd_path(fd);
-		if (!path) {
-			pathlen = 0;
-		} else {
-			pathlen = strlen(path) + 1;
-		}
 	}
 
 	if (path) {
@@ -1288,30 +1427,34 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		}
 	}
 
-	pseudo_debug(PDBGF_OP, "%s%s", pseudo_op_name(op),
-		(dirfd != -1 && dirfd != AT_FDCWD && op != OP_DUP) ? "at" : "");
-	if (path_extra_1) {
-		pseudo_debug(PDBGF_OP, " %s ->", path_extra_1);
-	}
-	if (path) {
-		pseudo_debug(PDBGF_OP, " %s", path);
-	}
-	/* for OP_RENAME in renameat, "fd" is also used for the
-	 * second dirfd.
-	 */
-	if (fd != -1 && op != OP_RENAME) {
-		pseudo_debug(PDBGF_OP, " [fd %d]", fd);
-	}
-	if (buf) {
-		pseudo_debug(PDBGF_OP, " (+buf)");
+	if (buf)
 		pseudo_msg_stat(&msg, buf);
-		if (buf && fd != -1) {
-			pseudo_debug(PDBGF_OP, " [dev/ino: %d/%llu]",
-				(int) buf->st_dev, (unsigned long long) buf->st_ino);
+
+	if (pseudo_util_debug_flags & PDBGF_OP) {
+		pseudo_debug(PDBGF_OP, "%s%s", pseudo_op_name(op),
+			(dirfd != -1 && dirfd != AT_FDCWD && op != OP_DUP) ? "at" : "");
+		if (path_extra_1) {
+			pseudo_debug(PDBGF_OP, " %s ->", path_extra_1);
 		}
-		pseudo_debug(PDBGF_OP, " (0%o)", (int) buf->st_mode);
+		if (path) {
+			pseudo_debug(PDBGF_OP, " %s", path);
+		}
+		/* for OP_RENAME in renameat, "fd" is also used for the
+		 * second dirfd.
+		 */
+		if (fd != -1 && op != OP_RENAME) {
+			pseudo_debug(PDBGF_OP, " [fd %d]", fd);
+		}
+		if (buf) {
+			pseudo_debug(PDBGF_OP, " (+buf)");
+			if (fd != -1) {
+				pseudo_debug(PDBGF_OP, " [dev/ino: %d/%llu]",
+					(int) buf->st_dev, (unsigned long long) buf->st_ino);
+			}
+			pseudo_debug(PDBGF_OP, " (0%o)", (int) buf->st_mode);
+		}
+		pseudo_debug(PDBGF_OP, ": ");
 	}
-	pseudo_debug(PDBGF_OP, ": ");
 	msg.type = PSEUDO_MSG_OP;
 	msg.op = op;
 	msg.fd = fd;
@@ -1413,28 +1556,27 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		break;
 	}
 	if (do_request) {
-		struct timeval tv1, tv2;
+#ifdef PSEUDO_PROFILING
+		struct timeval tv1_ipc, tv2_ipc;
+#endif
                 if (!pseudo_op_wait(msg.op))
                         msg.type = PSEUDO_MSG_FASTOP;
 		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sending request [ino %llu]\n", (unsigned long long) msg.ino);
-		gettimeofday(&tv1, NULL);
+#ifdef PSEUDO_PROFILING
+		gettimeofday(&tv1_ipc, NULL);
+#endif
 		if (pseudo_local_only) {
 			/* disable server */
 			result = NULL;
 		} else {
 			result = pseudo_client_request(&msg, pathlen, path);
 		}
-		gettimeofday(&tv2, NULL);
-		++messages;
-		message_time.tv_sec += (tv2.tv_sec - tv1.tv_sec);
-		message_time.tv_usec += (tv2.tv_usec - tv1.tv_usec);
-		if (message_time.tv_usec < 0) {
-			message_time.tv_usec += 1000000;
-			--message_time.tv_sec;
-		} else while (message_time.tv_usec > 1000000) {
-			message_time.tv_usec -= 1000000;
-			++message_time.tv_sec;
-		}
+#ifdef PSEUDO_PROFILING
+		gettimeofday(&tv2_ipc, NULL);
+		++profile_data.messages;
+		profile_data.ipc_time.tv_sec += (tv2_ipc.tv_sec - tv1_ipc.tv_sec);
+		profile_data.ipc_time.tv_usec += (tv2_ipc.tv_usec - tv1_ipc.tv_usec);
+#endif
 		if (result) {
 			pseudo_debug(PDBGF_OP, "(%d) %s", getpid(), pseudo_res_name(result->result));
 			if (op == OP_STAT || op == OP_FSTAT) {
@@ -1450,20 +1592,25 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 					(int) result->uid,
 					(int) result->gid);
 			}
-		} else {
+		} else if (msg.type != PSEUDO_MSG_FASTOP) {
 			pseudo_debug(PDBGF_OP, "(%d) no answer", getpid());
 		}
-	} else {
+	} else if (!result) {
 		pseudo_debug(PDBGF_OP, "(%d) (no request)", getpid());
 	}
 	pseudo_debug(PDBGF_OP, "\n");
 
-	if (do_request && (messages % 1000 == 0)) {
-		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE | PDBGF_BENCHMARK, "%d messages handled in %.4f seconds\n",
-			messages,
-			(double) message_time.tv_sec +
-			(double) message_time.tv_usec / 1000000.0);
+#ifdef PSEUDO_PROFILING
+	gettimeofday(&tv2_op, NULL);
+	profile_data.op_time.tv_sec += (tv2_op.tv_sec - tv1_op.tv_sec);
+	profile_data.op_time.tv_usec += (tv2_op.tv_usec - tv1_op.tv_usec);
+	if (profile_data.total_ops % profile_interval == 0) {
+		pseudo_profile_report();
+		if (profile_interval < 100) {
+			profile_interval = profile_interval * 10;
+		}
 	}
+#endif
 	/* reenable wrappers */
 	pseudo_magic();
 

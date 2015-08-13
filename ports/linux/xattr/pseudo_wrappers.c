@@ -166,6 +166,10 @@ static int shared_setxattr(const char *path, int fd, const char *name, const voi
 			}
 		}
 	}
+	if (!strcmp(name, "user.pseudo_data")) {
+		pseudo_debug(PDBGF_XATTR | PDBGF_XATTRDB, "user.pseudo_data xattribute does not get to go in database.\n");
+		return -1;
+	}
 
 	switch (flags) {
 	case XATTR_CREATE:

@@ -67,9 +67,12 @@ execl(const char *file, const char *arg, ...) {
 
 	int rc = -1;
 
+	PROFILE_START;
+
 	if (!pseudo_check_wrappers()) {
 		/* rc was initialized to the "failure" value */
 		pseudo_enosys("execl");
+		PROFILE_DONE;
 		return rc;
 	}
 
@@ -78,6 +81,7 @@ execl(const char *file, const char *arg, ...) {
 	va_end(ap);
 	if (!argv) {
 		errno = ENOMEM;
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -86,6 +90,7 @@ execl(const char *file, const char *arg, ...) {
 	if (pseudo_getlock()) {
 		errno = EBUSY;
 		sigprocmask(SIG_SETMASK, &saved, NULL);
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -101,6 +106,7 @@ execl(const char *file, const char *arg, ...) {
 	pseudo_debug(PDBGF_WRAPPER, "completed: execl\n");
 	errno = save_errno;
 	free(argv);
+	PROFILE_DONE;
 	return rc;
 }
 
@@ -111,10 +117,12 @@ execlp(const char *file, const char *arg, ...) {
 	char **argv;
 
 	int rc = -1;
+	PROFILE_START;
 
 	if (!pseudo_check_wrappers()) {
 		/* rc was initialized to the "failure" value */
 		pseudo_enosys("execlp");
+		PROFILE_DONE;
 		return rc;
 	}
 
@@ -123,6 +131,7 @@ execlp(const char *file, const char *arg, ...) {
 	va_end(ap);
 	if (!argv) {
 		errno = ENOMEM;
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -131,6 +140,7 @@ execlp(const char *file, const char *arg, ...) {
 	if (pseudo_getlock()) {
 		errno = EBUSY;
 		sigprocmask(SIG_SETMASK, &saved, NULL);
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -146,6 +156,7 @@ execlp(const char *file, const char *arg, ...) {
 	pseudo_debug(PDBGF_WRAPPER, "completed: execlp\n");
 	errno = save_errno;
 	free(argv);
+	PROFILE_DONE;
 	return rc;
 }
 
@@ -157,10 +168,12 @@ execle(const char *file, const char *arg, ...) {
 	char **envp;
 
 	int rc = -1;
+	PROFILE_START;
 
 	if (!pseudo_check_wrappers()) {
 		/* rc was initialized to the "failure" value */
 		pseudo_enosys("execle");
+		PROFILE_DONE;
 		return rc;
 	}
 
@@ -169,6 +182,7 @@ execle(const char *file, const char *arg, ...) {
 	va_end(ap);
 	if (!argv) {
 		errno = ENOMEM;
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -177,6 +191,7 @@ execle(const char *file, const char *arg, ...) {
 	if (pseudo_getlock()) {
 		errno = EBUSY;
 		sigprocmask(SIG_SETMASK, &saved, NULL);
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -192,6 +207,7 @@ execle(const char *file, const char *arg, ...) {
 	pseudo_debug(PDBGF_WRAPPER, "completed: execle\n");
 	errno = save_errno;
 	free(argv);
+	PROFILE_DONE;
 	return rc;
 }
 
@@ -201,9 +217,12 @@ execv(const char *file, char *const *argv) {
 	
 	int rc = -1;
 
+	PROFILE_START;
+
 	if (!pseudo_check_wrappers() || !real_execv) {
 		/* rc was initialized to the "failure" value */
 		pseudo_enosys("execv");
+		PROFILE_DONE;
 		return rc;
 	}
 
@@ -212,6 +231,7 @@ execv(const char *file, char *const *argv) {
 	if (pseudo_getlock()) {
 		errno = EBUSY;
 		sigprocmask(SIG_SETMASK, &saved, NULL);
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -226,6 +246,7 @@ execv(const char *file, char *const *argv) {
 	sigprocmask(SIG_SETMASK, &saved, NULL);
 	pseudo_debug(PDBGF_WRAPPER, "completed: execv\n");
 	errno = save_errno;
+	PROFILE_DONE;
 	return rc;
 }
 
@@ -234,10 +255,12 @@ execve(const char *file, char *const *argv, char *const *envp) {
 	sigset_t saved;
 	
 	int rc = -1;
+	PROFILE_START;
 
 	if (!pseudo_check_wrappers() || !real_execve) {
 		/* rc was initialized to the "failure" value */
 		pseudo_enosys("execve");
+		PROFILE_DONE;
 		return rc;
 	}
 
@@ -246,6 +269,7 @@ execve(const char *file, char *const *argv, char *const *envp) {
 	if (pseudo_getlock()) {
 		errno = EBUSY;
 		sigprocmask(SIG_SETMASK, &saved, NULL);
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -260,6 +284,7 @@ execve(const char *file, char *const *argv, char *const *envp) {
 	sigprocmask(SIG_SETMASK, &saved, NULL);
 	pseudo_debug(PDBGF_WRAPPER, "completed: execve\n");
 	errno = save_errno;
+	PROFILE_DONE;
 	return rc;
 }
 
@@ -268,10 +293,12 @@ execvp(const char *file, char *const *argv) {
 	sigset_t saved;
 	
 	int rc = -1;
+	PROFILE_START;
 
 	if (!pseudo_check_wrappers() || !real_execvp) {
 		/* rc was initialized to the "failure" value */
 		pseudo_enosys("execvp");
+		PROFILE_DONE;
 		return rc;
 	}
 
@@ -280,6 +307,7 @@ execvp(const char *file, char *const *argv) {
 	if (pseudo_getlock()) {
 		errno = EBUSY;
 		sigprocmask(SIG_SETMASK, &saved, NULL);
+		PROFILE_DONE;
 		return -1;
 	}
 
@@ -294,9 +322,13 @@ execvp(const char *file, char *const *argv) {
 	sigprocmask(SIG_SETMASK, &saved, NULL);
 	pseudo_debug(PDBGF_WRAPPER, "completed: execvp\n");
 	errno = save_errno;
+	PROFILE_DONE;
 	return rc;
 }
 
+/* no profiling in fork because it wouldn't work anyway
+ * half the time
+ */
 int
 fork(void) {
 	sigset_t saved;

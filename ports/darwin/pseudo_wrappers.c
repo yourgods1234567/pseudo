@@ -130,7 +130,8 @@ posix_permissions(const acl_header *header, int entries, int *extra, int *mode) 
 	if (rc == -1) { \
 		return rc; \
 	}
-	
+
+/* Note: no profiling implementation yet. */
 static ssize_t shared_getxattr(const char *path, int fd, const char *name, void *value, size_t size, u_int32_t position, int options) {
 	RC_AND_BUF
 

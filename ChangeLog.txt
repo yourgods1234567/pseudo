@@ -1,3 +1,13 @@
+2015-08-17:
+	* (seebs) profiling improvements
+
+2015-08-14:
+	* (seebs) profiling cleanup, add profiler to gitignore
+	* Start using 1.7.0 version for internal work.
+
+2015-08-13:
+	* (seebs) client profiling stuff (first pass)
+
 2015-07-17:
 	* (seebs) allow actually making fifos without randomly closing fd 0
 	* 1.6.7
