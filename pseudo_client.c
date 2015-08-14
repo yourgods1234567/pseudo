@@ -80,8 +80,7 @@ static int npasswd_paths = 0;
 #ifdef PSEUDO_PROFILING
 int pseudo_profile_fd = -1;
 static int profile_interval = 1;
-static int messages = 0, total_ops = 0, processes = 1;
-static struct timeval total_time = { .tv_sec = 0 }, ipc_time = { .tv_sec = 0 };
+static pseudo_profile_t profile_data;
 #endif
 static int pseudo_inited = 0;
 
@@ -196,6 +195,7 @@ pseudo_profile_start(void) {
 	/* We use -1 as a starting value, and -2 as a value
 	 * indicating not to try to open it.
 	 */
+	int existing_data = 0;
 	if (pseudo_profile_fd == -1) {
 		int fd = -2;
 		char *profile_path = pseudo_get_value("PSEUDO_PROFILE_PATH");
@@ -208,25 +208,17 @@ pseudo_profile_start(void) {
 				fd = -2;
 			} else {
 				int pid = getpid();
-				processes = 1;
-				total_ops = 0;
-				messages = 0;
-				total_time = (struct timeval) { .tv_sec = 0 };
-				ipc_time = (struct timeval) { .tv_sec = 0 };
 				if (pid > 0) {
 					pseudo_profile_t data;
 					int rc;
 
 					rc = lseek(fd, pid * sizeof(data), SEEK_SET);
 					if (rc == 0) {
-						rc = read(fd, &data, sizeof(data));
+						rc = read(fd, &profile_data, sizeof(profile_data));
 						/* cumulative with other values in same file */
-						if (rc == sizeof(data)) {
-							processes = data.processes + 1;
-							total_ops = data.total_ops;
-							messages = data.messages;
-							total_time = data.total_time;
-							ipc_time = data.ipc_time;
+						if (rc == sizeof(profile_data)) {
+							existing_data = 1;
+							++profile_data.processes;
 						}
 						profile_interval = 1;
 					}
@@ -234,6 +226,15 @@ pseudo_profile_start(void) {
 			}
 		}
 		pseudo_profile_fd = fd;
+	}
+	if (!existing_data) {
+		profile_data = (pseudo_profile_t) {
+			.processes = 1,
+			.total_ops = 0,
+			.messages = 0,
+			.total_time = (struct timeval) { .tv_sec = 0 },
+			.ipc_time = (struct timeval) { .tv_sec = 0 },
+		};
 	}
 }
 
@@ -260,19 +261,12 @@ pseudo_profile_report(void) {
 	if (pseudo_profile_fd < 0) {
 		return;
 	}
-	fix_tv(&total_time);
-	fix_tv(&ipc_time);
+	fix_tv(&profile_data.total_time);
+	fix_tv(&profile_data.ipc_time);
 	int pid = getpid();
 	if (pid >= 0) {
-		pseudo_profile_t data = {
-			.processes = processes,
-			.total_ops = total_ops,
-			.messages = messages,
-			.total_time = total_time,
-			.ipc_time = ipc_time
-		};
-		lseek(pseudo_profile_fd, pid * sizeof(data), SEEK_SET);
-		write(pseudo_profile_fd, &data, sizeof(data));
+		lseek(pseudo_profile_fd, pid * sizeof(profile_data), SEEK_SET);
+		write(pseudo_profile_fd, &profile_data, sizeof(profile_data));
 	}
 }
 #endif
@@ -1256,7 +1250,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	struct timeval tv1_total, tv2_total;
 
 	gettimeofday(&tv1_total, NULL);
-	++total_ops;
+	++profile_data.total_ops;
 #endif
 	/* disable wrappers */
 	pseudo_antimagic();
@@ -1536,9 +1530,9 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		}
 #ifdef PSEUDO_PROFILING
 		gettimeofday(&tv2_ipc, NULL);
-		++messages;
-		ipc_time.tv_sec += (tv2_ipc.tv_sec - tv1_ipc.tv_sec);
-		ipc_time.tv_usec += (tv2_ipc.tv_usec - tv1_ipc.tv_usec);
+		++profile_data.messages;
+		profile_data.ipc_time.tv_sec += (tv2_ipc.tv_sec - tv1_ipc.tv_sec);
+		profile_data.ipc_time.tv_usec += (tv2_ipc.tv_usec - tv1_ipc.tv_usec);
 #endif
 		if (result) {
 			pseudo_debug(PDBGF_OP, "(%d) %s", getpid(), pseudo_res_name(result->result));
@@ -1565,9 +1559,9 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 
 #ifdef PSEUDO_PROFILING
 	gettimeofday(&tv2_total, NULL);
-	total_time.tv_sec += (tv2_total.tv_sec - tv1_total.tv_sec);
-	total_time.tv_usec += (tv2_total.tv_usec - tv1_total.tv_usec);
-	if (total_ops % profile_interval == 0) {
+	profile_data.total_time.tv_sec += (tv2_total.tv_sec - tv1_total.tv_sec);
+	profile_data.total_time.tv_usec += (tv2_total.tv_usec - tv1_total.tv_usec);
+	if (profile_data.total_ops % profile_interval == 0) {
 		pseudo_profile_report();
 		if (profile_interval < 100) {
 			profile_interval = profile_interval * 10;
