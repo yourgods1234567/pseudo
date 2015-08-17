@@ -85,7 +85,7 @@ static int npasswd_paths = 0;
 int pseudo_profile_fd = -1;
 static int profile_interval = 1;
 static pseudo_profile_t profile_data;
-extern struct timeval *pseudo_wrapper_time = &profile_data.wrapper_time;
+struct timeval *pseudo_wrapper_time = &profile_data.wrapper_time;
 #endif
 static int pseudo_inited = 0;
 
@@ -360,6 +360,7 @@ pseudo_profile_start(void) {
 			.processes = 1,
 			.total_ops = 0,
 			.messages = 0,
+			.wrapper_time = (struct timeval) { .tv_sec = 0 },
 			.total_time = (struct timeval) { .tv_sec = 0 },
 			.ipc_time = (struct timeval) { .tv_sec = 0 },
 		};

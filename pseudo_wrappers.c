@@ -31,6 +31,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
 #include <sys/wait.h>
 #include <dlfcn.h>
 
@@ -257,7 +258,7 @@ pseudo_check_wrappers(void) {
 #define PROFILE_DONE do { \
 	gettimeofday(&tv2, NULL); \
 	pseudo_wrapper_time->tv_sec += tv2.tv_sec - tv1.tv_sec; \
-	pseudo_wrapper_time->tv_usec = tv2.tv_sec - tv1.tv_sec; } while(0)
+	pseudo_wrapper_time->tv_usec = tv2.tv_usec - tv1.tv_usec; } while(0)
 #else
 #define PROFILE_DONE do {} while(0)
 #endif
