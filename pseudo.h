@@ -159,6 +159,7 @@ typedef struct {
 	long long messages;
 	struct timeval total_time;
 	struct timeval ipc_time;
+	struct timeval wrapper_time;
 } pseudo_profile_t;
 #endif
 #include "pseudo_ports.h"

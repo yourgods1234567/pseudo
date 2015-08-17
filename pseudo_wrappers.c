@@ -70,6 +70,8 @@ static void _libpseudo_init(void) __attribute__ ((constructor));
 
 static int _libpseudo_initted = 0;
 
+extern struct timeval *pseudo_wrapper_time;
+
 static void
 _libpseudo_init(void) {
 	pseudo_getlock();
@@ -250,6 +252,15 @@ pseudo_check_wrappers(void) {
 
 	return _libpseudo_initted;
 }		
+/* profiling shared postamble */
+#ifdef PSEUDO_PROFILING
+#define PROFILE_DONE do { \
+	gettimeofday(&tv2, NULL); \
+	pseudo_wrapper_time->tv_sec += tv2.tv_sec - tv1.tv_sec; \
+	pseudo_wrapper_time->tv_usec = tv2.tv_sec - tv1.tv_sec; } while(0)
+#else
+#define PROFILE_DONE do {} while(0)
+#endif
 
 /* the generated code goes here */
 #include "port_wrappers.c"

@@ -28,6 +28,7 @@ opt_rpath=
 opt_memory=
 opt_async=
 opt_xattr=
+opt_xattrdb=false
 opt_profile=false
 opt_passwd_fallback='""'
 
@@ -42,6 +43,7 @@ usage()
     echo >&2 "           [--suffix=...]"
     echo >&2 "           [--enable-memory-db]"
     echo >&2 "           [--enable-xattr]"
+    echo >&2 "           [--enable-xattrdb]"
     echo >&2 "           [--enable-profiling]"
     echo >&2 "           [--enable-force-async]"
     echo >&2 "           [--with-sqlite=...]"
@@ -118,6 +120,12 @@ do
         ;;
     --enable-xattr=yes | --enable-xattr)
         opt_xattr=true
+	;;
+    --enable-xattrdb=no)
+        opt_xattrdb=false
+        ;;
+    --enable-xattrdb=yes | --enable-xattrdb)
+        opt_xattrdb=true
 	;;
     --enable-memory-db=no)
         opt_memory=false
@@ -251,13 +259,31 @@ else
     FORCE_ASYNC=""
 fi
 
+if getfattr --help >/dev/null 2>&1; then
+    xattr_runs=true
+else
+    xattr_runs=false
+fi
+
+
 if [ -z "$opt_xattr" ]; then
-    if getfattr --help >/dev/null 2>&1; then
+    if $opt_xattrdb; then
         opt_xattr=true
-	echo "getfattr runs, enabling extended attribute support"
+	echo "xattr DB support implies extended attribute support"
     else
-        opt_xattr=false
-	echo "getfattr fails, disabling extended attribute support"
+        if $xattr_runs; then
+            opt_xattr=true
+	    echo "getfattr runs, enabling extended attribute support"
+        else
+            opt_xattr=false
+	    echo "getfattr fails, disabling extended attribute support"
+        fi
+    fi
+fi
+
+if $opt_xattr || $opt_xattrdb; then
+    if ! $xattr_runs; then
+        echo >&2 "WARNING: getfattr doesn't work, but xattr-related features requestd."
     fi
 fi
 
@@ -295,6 +321,7 @@ touch func_deps.mk
 sed -e '
   s,@PREFIX@,'"$opt_prefix"',g
   s,@XATTR@,'"$opt_xattr"',g
+  s,@XATTRDB@,'"$opt_xattrdb"',g
   s,@PROFILING@,'"$opt_profiling"',g
   s,@LIBDIR@,'"$opt_libdir"',g
   s,@LIB@,'"$opt_lib"',g

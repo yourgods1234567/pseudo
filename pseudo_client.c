@@ -37,6 +37,10 @@
 #include <pwd.h>
 #include <grp.h>
 
+#ifdef PSEUDO_XATTRDB
+#include <sys/xattr.h>
+#endif
+
 #include "pseudo.h"
 #include "pseudo_ipc.h"
 #include "pseudo_client.h"
@@ -81,6 +85,7 @@ static int npasswd_paths = 0;
 int pseudo_profile_fd = -1;
 static int profile_interval = 1;
 static pseudo_profile_t profile_data;
+extern struct timeval *pseudo_wrapper_time = &profile_data.wrapper_time;
 #endif
 static int pseudo_inited = 0;
 
@@ -189,16 +194,130 @@ build_passwd_paths(void)
 	return;
 }
 
+#ifdef PSEUDO_XATTRDB
+/* Executive summary: We use an extended attribute,
+ * user.pseudo_data, to store exactly the data we would otherwise
+ * have stored in the database. Which is to say, uid, gid, mode, rdev.
+ *
+ * If we don't find a value, save an empty one with a lower version
+ * number to indicate that we don't have data to reduce round trips.
+ */
+typedef struct {
+	int version;
+	uid_t uid;
+	gid_t gid;
+	mode_t mode;
+	dev_t rdev;
+} pseudo_db_data_t;
+
+static pseudo_db_data_t pseudo_db_data = { .version = 0 };
+
+static pseudo_msg_t xattrdb_data;
+
+pseudo_msg_t *
+pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
+	int rc = -1;
+	if (!path && fd < 0)
+		return NULL;
+	if (!buf)
+		return NULL;
+	pseudo_db_data.version = 1;
+	pseudo_db_data.uid = buf->st_uid;
+	pseudo_db_data.gid = buf->st_gid;
+	pseudo_db_data.mode = buf->st_mode;
+	pseudo_db_data.rdev = buf->st_rdev;
+	if (path) {
+		rc = setxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+	} else if (fd >= 0) {
+		rc = fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+	}
+	pseudo_debug(PDBGF_XATTRDB, "tried to save data for %s/%d: uid %d, rc %d.\n",
+		path ? path : "<nil>", fd, (int) pseudo_db_data.uid, rc);
+	/* none of the other fields are checked on save, and the value
+	 * is currently only really used by mknod.
+	 */
+	if (rc == 0) {
+		xattrdb_data.result = RESULT_SUCCEED;
+		return &xattrdb_data;
+	}
+	return NULL;
+}
+
+pseudo_msg_t *
+pseudo_xattrdb_load(int fd, const char *path) {
+	int rc = -1, retryrc = -1;
+	pseudo_db_data = (pseudo_db_data_t) { .version = 0 };
+	if (!path && fd < 0)
+		return NULL;
+	if (path) {
+		rc = getxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
+		if (rc == -1) {
+			retryrc = setxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+		}
+	} else if (fd >= 0) {
+		rc = fgetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
+		if (rc == -1) {
+			retryrc = fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+		}
+	}
+	pseudo_debug(PDBGF_XATTRDB, "tried to load data for %s/%d: rc %d, version %d.\n",
+		path ? path : "<nil>", fd, rc, pseudo_db_data.version);
+	if (rc == -1 && retryrc == 0) {
+		/* there's no data, but there could have been; treat
+		 * this as an empty database result.
+		 */
+		xattrdb_data.result = RESULT_FAIL;
+		return &xattrdb_data;
+	} else if (rc == -1) {
+		/* we can't create an extended attribute, so we may have
+		 * used the database.
+		 */
+		return NULL;
+	}
+	/* Version 0 = just recording that we looked and found
+	 * nothing.
+	 * Version 1 = actually implemented.
+	 */
+	switch (pseudo_db_data.version) {
+	case 0:
+	default:
+		xattrdb_data.result = RESULT_FAIL;
+		break;
+	case 1:
+		xattrdb_data.uid = pseudo_db_data.uid;
+		xattrdb_data.gid = pseudo_db_data.gid;
+		xattrdb_data.mode = pseudo_db_data.mode;
+		xattrdb_data.rdev = pseudo_db_data.rdev;
+		xattrdb_data.result = RESULT_SUCCEED;
+		break;
+	}
+	return &xattrdb_data;
+}
+#endif
+
 #ifdef PSEUDO_PROFILING
+static int pseudo_profile_pid = -2;
+
 static void
 pseudo_profile_start(void) {
 	/* We use -1 as a starting value, and -2 as a value
 	 * indicating not to try to open it.
 	 */
 	int existing_data = 0;
+	int pid = getpid();
+	if (pseudo_profile_pid > 0 && pseudo_profile_pid != pid) {
+		/* looks like there's been a fork. We intentionally
+		 * abandon any existing stats, since the parent might
+		 * want to write them, and we want to combine with
+		 * any previous stats for this pid.
+		 */
+		close(pseudo_profile_fd);
+		pseudo_profile_fd = -1;
+	}
 	if (pseudo_profile_fd == -1) {
 		int fd = -2;
 		char *profile_path = pseudo_get_value("PSEUDO_PROFILE_PATH");
+		pseudo_profile_pid = pid;
 		if (profile_path) {
 			fd = open(profile_path, O_RDWR | O_CREAT, 0600);
 			if (fd >= 0) {
@@ -207,18 +326,20 @@ pseudo_profile_start(void) {
 			if (fd < 0) {
 				fd = -2;
 			} else {
-				int pid = getpid();
 				if (pid > 0) {
 					pseudo_profile_t data;
-					int rc;
+					off_t rc;
 
 					rc = lseek(fd, pid * sizeof(data), SEEK_SET);
-					if (rc == 0) {
+					if (rc == (off_t) (pid * sizeof(data))) {
 						rc = read(fd, &profile_data, sizeof(profile_data));
 						/* cumulative with other values in same file */
 						if (rc == sizeof(profile_data)) {
+							pseudo_debug(PDBGF_PROFILE, "pid %d found existing profiling data.\n", pid);
 							existing_data = 1;
 							++profile_data.processes;
+						} else {
+							pseudo_debug(PDBGF_PROFILE, "read failed for pid %d: %d, %d\n", pid, (int) rc, errno);
 						}
 						profile_interval = 1;
 					}
@@ -226,8 +347,15 @@ pseudo_profile_start(void) {
 			}
 		}
 		pseudo_profile_fd = fd;
+	} else {
+		++profile_data.processes;
+		profile_data.total_ops = 0;
+		profile_data.messages = 0;
+		profile_data.total_time = (struct timeval) { .tv_sec = 0 };
+		profile_data.ipc_time = (struct timeval) { .tv_sec = 0 };
 	}
 	if (!existing_data) {
+		pseudo_debug(PDBGF_PROFILE, "pid %d found no existing profiling data.\n", getpid());
 		profile_data = (pseudo_profile_t) {
 			.processes = 1,
 			.total_ops = 0,
@@ -256,6 +384,7 @@ fix_tv(struct timeval *tv) {
 	}
 }
 
+static int profile_reported = 0;
 static void
 pseudo_profile_report(void) {
 	if (pseudo_profile_fd < 0) {
@@ -263,10 +392,17 @@ pseudo_profile_report(void) {
 	}
 	fix_tv(&profile_data.total_time);
 	fix_tv(&profile_data.ipc_time);
-	int pid = getpid();
-	if (pid >= 0) {
-		lseek(pseudo_profile_fd, pid * sizeof(profile_data), SEEK_SET);
-		write(pseudo_profile_fd, &profile_data, sizeof(profile_data));
+	if (pseudo_profile_pid >= 0) {
+		int rc1, rc2;
+		rc1 = lseek(pseudo_profile_fd, pseudo_profile_pid * sizeof(profile_data), SEEK_SET);
+		rc2 = write(pseudo_profile_fd, &profile_data, sizeof(profile_data));
+		if (!profile_reported) {
+			pseudo_debug(PDBGF_PROFILE, "pid %d (%s) saving profiling info: %d, %d.\n",
+				pseudo_profile_pid,
+				program_invocation_name ? program_invocation_name : "unknown",
+				rc1, rc2);
+			profile_reported = 1;
+		}
 	}
 }
 #endif
@@ -1246,6 +1382,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	static char *alloced_path = 0;
 	static size_t alloced_len = 0;
 	int strip_slash;
+
 #ifdef PSEUDO_PROFILING
 	struct timeval tv1_total, tv2_total;
 
@@ -1255,10 +1392,58 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	/* disable wrappers */
 	pseudo_antimagic();
 
+	/* note: I am not entirely sure this should happen even if no
+	 * messages have actually been sent. */
 	if (!sent_messages) {
 		sent_messages = 1;
 		atexit(void_client_ping);
 	}
+
+	/* if path isn't available, try to find one? */
+	if (!path && fd >= 0 && fd <= nfds) {
+		path = fd_path(fd);
+		if (!path) {
+			pathlen = 0;
+		} else {
+			pathlen = strlen(path) + 1;
+		}
+	}
+
+#ifdef PSEUDO_XATTRDB
+	/* maybe use xattr instead */
+	/* note: if we use xattr, logging won't work reliably
+	 * because the server won't get messages if these work.
+	 */
+	switch (op) {
+	case OP_CHMOD:
+	case OP_CREAT:
+	case OP_FCHMOD:
+	case OP_MKDIR:
+	case OP_MKNOD:
+		{
+			/* use magic uid/gid */
+			struct stat64 bufcopy;
+			bufcopy = *buf;
+			bufcopy.st_uid = pseudo_fuid;
+			bufcopy.st_gid = pseudo_fgid;
+			result = pseudo_xattrdb_save(fd, path, &bufcopy);
+		}
+		break;
+	case OP_CHOWN:
+	case OP_FCHOWN:
+	case OP_LINK:
+		result = pseudo_xattrdb_save(fd, path, buf);
+		break;
+	case OP_FSTAT:
+	case OP_STAT:
+		result = pseudo_xattrdb_load(fd, path);
+		break;
+	default:
+		break;
+	}
+	if (result)
+		goto skip_path;
+#endif
 
 	if (op == OP_RENAME) {
 		va_list ap;
@@ -1306,16 +1491,6 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		va_end(ap);
 		pseudo_debug(PDBGF_XATTR, "%sxattr, name '%s'\n",
 			op == OP_GET_XATTR ? "get" : "remove", path_extra_1);
-	}
-
-	/* if path isn't available, try to find one? */
-	if (!path && fd >= 0 && fd <= nfds) {
-		path = fd_path(fd);
-		if (!path) {
-			pathlen = 0;
-		} else {
-			pathlen = strlen(path) + 1;
-		}
 	}
 
 	if (path) {
@@ -1388,30 +1563,41 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		}
 	}
 
-	pseudo_debug(PDBGF_OP, "%s%s", pseudo_op_name(op),
-		(dirfd != -1 && dirfd != AT_FDCWD && op != OP_DUP) ? "at" : "");
-	if (path_extra_1) {
-		pseudo_debug(PDBGF_OP, " %s ->", path_extra_1);
-	}
-	if (path) {
-		pseudo_debug(PDBGF_OP, " %s", path);
-	}
-	/* for OP_RENAME in renameat, "fd" is also used for the
-	 * second dirfd.
+#ifdef PSEUDO_XATTRDB
+	/* If we were able to store things in xattr, we can easily skip
+	 * most of the fancy path computations and such.
 	 */
-	if (fd != -1 && op != OP_RENAME) {
-		pseudo_debug(PDBGF_OP, " [fd %d]", fd);
-	}
-	if (buf) {
-		pseudo_debug(PDBGF_OP, " (+buf)");
+	skip_path:
+#endif
+
+	if (buf)
 		pseudo_msg_stat(&msg, buf);
-		if (buf && fd != -1) {
-			pseudo_debug(PDBGF_OP, " [dev/ino: %d/%llu]",
-				(int) buf->st_dev, (unsigned long long) buf->st_ino);
+
+	if (pseudo_util_debug_flags & PDBGF_OP) {
+		pseudo_debug(PDBGF_OP, "%s%s", pseudo_op_name(op),
+			(dirfd != -1 && dirfd != AT_FDCWD && op != OP_DUP) ? "at" : "");
+		if (path_extra_1) {
+			pseudo_debug(PDBGF_OP, " %s ->", path_extra_1);
 		}
-		pseudo_debug(PDBGF_OP, " (0%o)", (int) buf->st_mode);
+		if (path) {
+			pseudo_debug(PDBGF_OP, " %s", path);
+		}
+		/* for OP_RENAME in renameat, "fd" is also used for the
+		 * second dirfd.
+		 */
+		if (fd != -1 && op != OP_RENAME) {
+			pseudo_debug(PDBGF_OP, " [fd %d]", fd);
+		}
+		if (buf) {
+			pseudo_debug(PDBGF_OP, " (+buf)");
+			if (fd != -1) {
+				pseudo_debug(PDBGF_OP, " [dev/ino: %d/%llu]",
+					(int) buf->st_dev, (unsigned long long) buf->st_ino);
+			}
+			pseudo_debug(PDBGF_OP, " (0%o)", (int) buf->st_mode);
+		}
+		pseudo_debug(PDBGF_OP, ": ");
 	}
-	pseudo_debug(PDBGF_OP, ": ");
 	msg.type = PSEUDO_MSG_OP;
 	msg.op = op;
 	msg.fd = fd;
@@ -1512,7 +1698,10 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		pseudo_diag("error: unknown or unimplemented operator %d (%s)", op, pseudo_op_name(op));
 		break;
 	}
-	if (do_request) {
+	/* result can only be set when PSEUDO_XATTRDB resulted in a
+	 * successful store to or read from the local database.
+	 */
+	if (do_request && !result) {
 #ifdef PSEUDO_PROFILING
 		struct timeval tv1_ipc, tv2_ipc;
 #endif
@@ -1549,12 +1738,17 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 					(int) result->uid,
 					(int) result->gid);
 			}
-		} else {
+		} else if (msg.type != PSEUDO_MSG_FASTOP) {
 			pseudo_debug(PDBGF_OP, "(%d) no answer", getpid());
 		}
-	} else {
+	} else if (!result) {
 		pseudo_debug(PDBGF_OP, "(%d) (no request)", getpid());
 	}
+	#ifdef PSEUDO_XATTRDB
+	else {
+		pseudo_debug(PDBGF_OP, "(%d) (handled through xattrdb)", getpid());
+	}
+	#endif
 	pseudo_debug(PDBGF_OP, "\n");
 
 #ifdef PSEUDO_PROFILING

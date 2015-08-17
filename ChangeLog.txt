@@ -1,3 +1,6 @@
+2015-08-17:
+	* (seebs) profiling improvements, xattrdb stuff
+
 2015-08-14:
 	* (seebs) profiling cleanup, add profiler to gitignore
 	* Start using 1.7.0 version for internal work.
