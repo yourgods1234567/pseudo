@@ -81,13 +81,16 @@ extern struct timeval *pseudo_wrapper_time;
 	gettimeofday(&tv2, NULL); \
 	pseudo_wrapper_time->tv_sec += tv2.tv_sec - tv1.tv_sec; \
 	pseudo_wrapper_time->tv_usec += tv2.tv_usec - tv1.tv_usec; } while(0)
+#else
+#define PROFILE_START do {} while(0)
+#define PROFILE_DONE do {} while(0)
+#endif
+
+#ifdef PSEUDO_XATTRDB
 extern ssize_t (*pseudo_real_getxattr)(const char *, const char *, void *, size_t);
 extern ssize_t (*pseudo_real_fgetxattr)(int, const char *, void *, size_t);
 extern int (*pseudo_real_setxattr)(const char *, const char *, const void *, size_t, int);
 extern int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int);
-#else
-#define PROFILE_START do {} while(0)
-#define PROFILE_DONE do {} while(0)
 #endif
 
 static void
@@ -164,7 +167,7 @@ pseudo_init_wrappers(void) {
 		done = 1;
 	}
 
-#ifdef PSEUDO_PROFILING
+#ifdef PSEUDO_XATTRDB
 	pseudo_real_getxattr = real_getxattr;
 	pseudo_real_fgetxattr = real_fgetxattr;
 	pseudo_real_setxattr = real_setxattr;
