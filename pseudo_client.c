@@ -195,6 +195,14 @@ build_passwd_paths(void)
 }
 
 #ifdef PSEUDO_XATTRDB
+/* We really want to avoid calling the wrappers for these inside the
+ * implementation. pseudo_wrappers will reinitialize these after it's
+ * gotten the real_* found.
+ */
+ssize_t (*pseudo_real_getxattr)(const char *, const char *, void *, size_t) = getxattr;
+ssize_t (*pseudo_real_fgetxattr)(int, const char *, void *, size_t) = fgetxattr;
+int (*pseudo_real_setxattr)(const char *, const char *, const void *, size_t, int) = setxattr;
+int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int) = fsetxattr;
 /* Executive summary: We use an extended attribute,
  * user.pseudo_data, to store exactly the data we would otherwise
  * have stored in the database. Which is to say, uid, gid, mode, rdev.
@@ -227,9 +235,9 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 	pseudo_db_data.mode = buf->st_mode;
 	pseudo_db_data.rdev = buf->st_rdev;
 	if (path) {
-		rc = setxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+		rc = pseudo_real_setxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	} else if (fd >= 0) {
-		rc = fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+		rc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	}
 	pseudo_debug(PDBGF_XATTRDB, "tried to save data for %s/%d: uid %d, rc %d.\n",
 		path ? path : "<nil>", fd, (int) pseudo_db_data.uid, rc);
@@ -250,14 +258,14 @@ pseudo_xattrdb_load(int fd, const char *path) {
 	if (!path && fd < 0)
 		return NULL;
 	if (path) {
-		rc = getxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
+		rc = pseudo_real_getxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
 		if (rc == -1) {
-			retryrc = setxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+			retryrc = pseudo_real_setxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 		}
 	} else if (fd >= 0) {
-		rc = fgetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
+		rc = pseudo_real_fgetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
 		if (rc == -1) {
-			retryrc = fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+			retryrc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 		}
 	}
 	pseudo_debug(PDBGF_XATTRDB, "tried to load data for %s/%d: rc %d, version %d.\n",
@@ -348,14 +356,17 @@ pseudo_profile_start(void) {
 		}
 		pseudo_profile_fd = fd;
 	} else {
+		pseudo_diag("_start called with existing fd? (pid %d)", (int) pseudo_profile_pid);
+		existing_data = 1;
 		++profile_data.processes;
 		profile_data.total_ops = 0;
 		profile_data.messages = 0;
+		profile_data.wrapper_time = (struct timeval) { .tv_sec = 0 };
 		profile_data.total_time = (struct timeval) { .tv_sec = 0 };
 		profile_data.ipc_time = (struct timeval) { .tv_sec = 0 };
 	}
 	if (!existing_data) {
-		pseudo_debug(PDBGF_PROFILE, "pid %d found no existing profiling data.\n", getpid());
+		pseudo_debug(PDBGF_PROFILE, "pid %d found no existing profiling data.\n", pid);
 		profile_data = (pseudo_profile_t) {
 			.processes = 1,
 			.total_ops = 0,
@@ -1748,6 +1759,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	#ifdef PSEUDO_XATTRDB
 	else {
 		pseudo_debug(PDBGF_OP, "(%d) (handled through xattrdb)", getpid());
+		pseudo_debug(PDBGF_OP, "result: %d\n", result->result);
 	}
 	#endif
 	pseudo_debug(PDBGF_OP, "\n");

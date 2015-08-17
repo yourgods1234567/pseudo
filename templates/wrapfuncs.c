@@ -22,10 +22,7 @@ ${name}(${decl_args}) {
 	sigset_t saved;
 	${variadic_decl}
 	${rc_decl}
-#ifdef PSEUDO_PROFILING
-	struct timeval tv1, tv2;
-	gettimeofday(&tv1, NULL);
-#endif
+	PROFILE_START;
 
 ${maybe_async_skip}
 
