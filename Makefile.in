@@ -167,7 +167,7 @@ offsets64:
 $(PSEUDO_PROFILE): $(BIN) pseudo_profile
 	cp pseudo_profile $(BIN)
 
-pseudo_profile: Makefile pseudo_profile.c
+pseudo_profile: Makefile pseudo_profile.c tables wrappers
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o pseudo_profile pseudo_profile.c
 
 clean:
