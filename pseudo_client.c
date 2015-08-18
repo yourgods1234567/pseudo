@@ -89,6 +89,8 @@ struct timeval *pseudo_wrapper_time = &profile_data.wrapper_time;
 #endif
 static int pseudo_inited = 0;
 
+extern int (*pseudo_real_lstat)(const char *, struct stat *);
+
 static int sent_messages = 0;
 
 int pseudo_nosymlinkexp = 0;
@@ -236,8 +238,8 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 		.rdev = buf->st_rdev
 	};
 	if (path) {
-		struct stat64 buf2;
-		rc = lstat(path, &buf2);
+		struct stat buf2;
+		rc = pseudo_real_lstat(path, &buf2);
 		if (rc != -1) {
 			if (S_ISDIR(buf->st_mode) != S_ISDIR(buf2.st_mode)) {
 				pseudo_diag("FATAL: directory mismatch on path '%s'.",
@@ -246,8 +248,8 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 		}
 		rc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	} else if (fd >= 0) {
-		struct stat64 buf2;
-		rc = fstat(path, &buf2);
+		struct stat buf2;
+		rc = fstat(fd, &buf2);
 		if (rc != -1) {
 			if (S_ISDIR(buf->st_mode) != S_ISDIR(buf2.st_mode)) {
 				pseudo_diag("FATAL: directory mismatch on fd %d.",
