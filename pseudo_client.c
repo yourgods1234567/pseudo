@@ -402,6 +402,7 @@ pseudo_profile_report(void) {
 	if (pseudo_profile_fd < 0) {
 		return;
 	}
+	fix_tv(&profile_data.wrapper_time);
 	fix_tv(&profile_data.total_time);
 	fix_tv(&profile_data.ipc_time);
 	if (pseudo_profile_pid >= 0) {
