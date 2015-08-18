@@ -218,7 +218,6 @@ typedef struct {
 	dev_t rdev;
 } pseudo_db_data_t;
 
-static pseudo_db_data_t pseudo_db_data = { .version = 0 };
 
 static pseudo_msg_t xattrdb_data;
 
@@ -229,11 +228,13 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 		return NULL;
 	if (!buf)
 		return NULL;
-	pseudo_db_data.version = 1;
-	pseudo_db_data.uid = buf->st_uid;
-	pseudo_db_data.gid = buf->st_gid;
-	pseudo_db_data.mode = buf->st_mode;
-	pseudo_db_data.rdev = buf->st_rdev;
+	pseudo_db_data_t pseudo_db_data = {
+		.version = 1,
+		.uid = buf->st_uid,
+		.gid = buf->st_gid,
+		.mode = buf->st_mode,
+		.rdev = buf->st_rdev
+	};
 	if (path) {
 		struct stat64 buf2;
 		rc = lstat(path, &buf2);
@@ -245,6 +246,14 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 		}
 		rc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	} else if (fd >= 0) {
+		struct stat64 buf2;
+		rc = fstat(path, &buf2);
+		if (rc != -1) {
+			if (S_ISDIR(buf->st_mode) != S_ISDIR(buf2.st_mode)) {
+				pseudo_diag("FATAL: directory mismatch on fd %d.",
+					fd);
+			}
+		}
 		rc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	}
 	pseudo_debug(PDBGF_XATTRDB, "tried to save data for %s/%d: uid %d, rc %d.\n",
@@ -262,17 +271,19 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 pseudo_msg_t *
 pseudo_xattrdb_load(int fd, const char *path) {
 	int rc = -1, retryrc = -1;
-	pseudo_db_data = (pseudo_db_data_t) { .version = 0 };
 	if (!path && fd < 0)
 		return NULL;
+	pseudo_db_data_t pseudo_db_data;
 	if (path) {
 		rc = pseudo_real_lgetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
 		if (rc == -1) {
+			pseudo_db_data = (pseudo_db_data_t) { .version = 0 };
 			retryrc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 		}
 	} else if (fd >= 0) {
 		rc = pseudo_real_fgetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
 		if (rc == -1) {
+			pseudo_db_data = (pseudo_db_data_t) { .version = 0 };
 			retryrc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 		}
 	}
