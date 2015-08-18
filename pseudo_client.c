@@ -235,6 +235,14 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 	pseudo_db_data.mode = buf->st_mode;
 	pseudo_db_data.rdev = buf->st_rdev;
 	if (path) {
+		struct stat64 buf2;
+		rc = lstat(path, &buf2);
+		if (rc != -1) {
+			if (S_ISDIR(buf->st_mode) != S_ISDIR(buf2.st_mode)) {
+				pseudo_diag("FATAL: directory mismatch on path '%s'.",
+					path);
+			}
+		}
 		rc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	} else if (fd >= 0) {
 		rc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
