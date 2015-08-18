@@ -87,9 +87,9 @@ extern struct timeval *pseudo_wrapper_time;
 #endif
 
 #ifdef PSEUDO_XATTRDB
-extern ssize_t (*pseudo_real_getxattr)(const char *, const char *, void *, size_t);
+extern ssize_t (*pseudo_real_lgetxattr)(const char *, const char *, void *, size_t);
 extern ssize_t (*pseudo_real_fgetxattr)(int, const char *, void *, size_t);
-extern int (*pseudo_real_setxattr)(const char *, const char *, const void *, size_t, int);
+extern int (*pseudo_real_lsetxattr)(const char *, const char *, const void *, size_t, int);
 extern int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int);
 #endif
 
@@ -168,9 +168,9 @@ pseudo_init_wrappers(void) {
 	}
 
 #ifdef PSEUDO_XATTRDB
-	pseudo_real_getxattr = real_getxattr;
+	pseudo_real_lgetxattr = real_lgetxattr;
 	pseudo_real_fgetxattr = real_fgetxattr;
-	pseudo_real_setxattr = real_setxattr;
+	pseudo_real_lsetxattr = real_lsetxattr;
 	pseudo_real_fsetxattr = real_fsetxattr;
 #endif
 

@@ -199,9 +199,9 @@ build_passwd_paths(void)
  * implementation. pseudo_wrappers will reinitialize these after it's
  * gotten the real_* found.
  */
-ssize_t (*pseudo_real_getxattr)(const char *, const char *, void *, size_t) = getxattr;
+ssize_t (*pseudo_real_lgetxattr)(const char *, const char *, void *, size_t) = lgetxattr;
 ssize_t (*pseudo_real_fgetxattr)(int, const char *, void *, size_t) = fgetxattr;
-int (*pseudo_real_setxattr)(const char *, const char *, const void *, size_t, int) = setxattr;
+int (*pseudo_real_lsetxattr)(const char *, const char *, const void *, size_t, int) = lsetxattr;
 int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int) = fsetxattr;
 /* Executive summary: We use an extended attribute,
  * user.pseudo_data, to store exactly the data we would otherwise
@@ -235,7 +235,7 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 	pseudo_db_data.mode = buf->st_mode;
 	pseudo_db_data.rdev = buf->st_rdev;
 	if (path) {
-		rc = pseudo_real_setxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+		rc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	} else if (fd >= 0) {
 		rc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	}
@@ -258,9 +258,9 @@ pseudo_xattrdb_load(int fd, const char *path) {
 	if (!path && fd < 0)
 		return NULL;
 	if (path) {
-		rc = pseudo_real_getxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
+		rc = pseudo_real_lgetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
 		if (rc == -1) {
-			retryrc = pseudo_real_setxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+			retryrc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 		}
 	} else if (fd >= 0) {
 		rc = pseudo_real_fgetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
