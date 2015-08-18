@@ -83,7 +83,7 @@ static struct pseudo_variables pseudo_env[] = {
 static int pseudo_util_initted = -1;  /* Not yet run */
 
 /* bypass wrapper logic on path computations */
-int (*pseudo_real_lstat)(char *path, struct stat *buf) = lstat;
+int (*pseudo_real_lstat)(const char *path, struct stat *buf) = lstat;
 
 #if 0
 static void

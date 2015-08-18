@@ -92,7 +92,7 @@ extern ssize_t (*pseudo_real_fgetxattr)(int, const char *, void *, size_t);
 extern int (*pseudo_real_lsetxattr)(const char *, const char *, const void *, size_t, int);
 extern int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int);
 #endif
-extern int (*pseudo_real_lstat)(char *, struct stat *);
+extern int (*pseudo_real_lstat)(const char *, struct stat *);
 
 static void
 _libpseudo_init(void) {
