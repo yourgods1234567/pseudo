@@ -157,7 +157,7 @@ typedef struct {
 	int processes;
 	long long total_ops;
 	long long messages;
-	struct timeval total_time;
+	struct timeval op_time;
 	struct timeval ipc_time;
 	struct timeval wrapper_time;
 } pseudo_profile_t;

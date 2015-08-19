@@ -221,7 +221,6 @@ typedef struct {
 	dev_t rdev;
 } pseudo_db_data_t;
 
-
 static pseudo_msg_t xattrdb_data;
 
 pseudo_msg_t *
@@ -239,24 +238,8 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 		.rdev = buf->st_rdev
 	};
 	if (path) {
-		struct stat buf2;
-		rc = pseudo_real_lstat(path, &buf2);
-		if (rc != -1) {
-			if (S_ISDIR(buf->st_mode) != S_ISDIR(buf2.st_mode)) {
-				pseudo_diag("FATAL: directory mismatch on path '%s'.\n",
-					path);
-			}
-		}
 		rc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	} else if (fd >= 0) {
-		struct stat buf2;
-		rc = pseudo_real_fstat(fd, &buf2);
-		if (rc != -1) {
-			if (S_ISDIR(buf->st_mode) != S_ISDIR(buf2.st_mode)) {
-				pseudo_diag("FATAL: directory mismatch on fd %d.\n",
-					fd);
-			}
-		}
 		rc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	}
 	pseudo_debug(PDBGF_XATTRDB, "tried to save data for %s/%d: uid %d, mode %o, rc %d.\n",
@@ -272,10 +255,18 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 }
 
 pseudo_msg_t *
-pseudo_xattrdb_load(int fd, const char *path) {
+pseudo_xattrdb_load(int fd, const char *path, const struct stat64 *buf) {
 	int rc = -1, retryrc = -1;
 	if (!path && fd < 0)
 		return NULL;
+	/* don't try to getxattr on a thing unless we think it is
+	 * likely to work.
+	 */
+	if (buf) {
+		if (!S_ISDIR(buf->st_mode) && !S_ISREG(buf->st_mode)) {
+			return NULL;
+		}
+	}
 	pseudo_db_data_t pseudo_db_data;
 	if (path) {
 		rc = pseudo_real_lgetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
@@ -378,13 +369,13 @@ pseudo_profile_start(void) {
 		}
 		pseudo_profile_fd = fd;
 	} else {
-		pseudo_diag("_start called with existing fd? (pid %d)", (int) pseudo_profile_pid);
+		pseudo_debug(PDBGF_PROFILE, "_start called with existing fd? (pid %d)", (int) pseudo_profile_pid);
 		existing_data = 1;
 		++profile_data.processes;
 		profile_data.total_ops = 0;
 		profile_data.messages = 0;
 		profile_data.wrapper_time = (struct timeval) { .tv_sec = 0 };
-		profile_data.total_time = (struct timeval) { .tv_sec = 0 };
+		profile_data.op_time = (struct timeval) { .tv_sec = 0 };
 		profile_data.ipc_time = (struct timeval) { .tv_sec = 0 };
 	}
 	if (!existing_data) {
@@ -394,7 +385,7 @@ pseudo_profile_start(void) {
 			.total_ops = 0,
 			.messages = 0,
 			.wrapper_time = (struct timeval) { .tv_sec = 0 },
-			.total_time = (struct timeval) { .tv_sec = 0 },
+			.op_time = (struct timeval) { .tv_sec = 0 },
 			.ipc_time = (struct timeval) { .tv_sec = 0 },
 		};
 	}
@@ -425,7 +416,7 @@ pseudo_profile_report(void) {
 		return;
 	}
 	fix_tv(&profile_data.wrapper_time);
-	fix_tv(&profile_data.total_time);
+	fix_tv(&profile_data.op_time);
 	fix_tv(&profile_data.ipc_time);
 	if (pseudo_profile_pid >= 0) {
 		int rc1, rc2;
@@ -453,10 +444,10 @@ pseudo_init_client(void) {
 		connect_fd = -1;
 	}
 #ifdef PSEUDO_PROFILING
-	if (pseudo_profile_fd != -1) {
+	if (pseudo_profile_fd > -1) {
 		close(pseudo_profile_fd);
-		pseudo_profile_fd = -1;
 	}
+	pseudo_profile_fd = -1;
 #endif
 
 	/* in child processes, PSEUDO_DISABLED may have become set to
@@ -531,7 +522,7 @@ pseudo_init_client(void) {
 	env = getenv("PSEUDO_UNLOAD");
 	if (env) {
 		pseudo_set_value("PSEUDO_UNLOAD", env);
-		pseudo_disabled=1;
+		pseudo_disabled = 1;
 	}
 
 	/* Setup global items needed for pseudo to function... */
@@ -1420,9 +1411,9 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	int strip_slash;
 
 #ifdef PSEUDO_PROFILING
-	struct timeval tv1_total, tv2_total;
+	struct timeval tv1_op, tv2_op;
 
-	gettimeofday(&tv1_total, NULL);
+	gettimeofday(&tv1_op, NULL);
 	++profile_data.total_ops;
 #endif
 	/* disable wrappers */
@@ -1472,7 +1463,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		break;
 	case OP_FSTAT:
 	case OP_STAT:
-		result = pseudo_xattrdb_load(fd, path);
+		result = pseudo_xattrdb_load(fd, path, buf);
 		break;
 	default:
 		break;
@@ -1789,9 +1780,9 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	pseudo_debug(PDBGF_OP, "\n");
 
 #ifdef PSEUDO_PROFILING
-	gettimeofday(&tv2_total, NULL);
-	profile_data.total_time.tv_sec += (tv2_total.tv_sec - tv1_total.tv_sec);
-	profile_data.total_time.tv_usec += (tv2_total.tv_usec - tv1_total.tv_usec);
+	gettimeofday(&tv2_op, NULL);
+	profile_data.op_time.tv_sec += (tv2_op.tv_sec - tv1_op.tv_sec);
+	profile_data.op_time.tv_usec += (tv2_op.tv_usec - tv1_op.tv_usec);
 	if (profile_data.total_ops % profile_interval == 0) {
 		pseudo_profile_report();
 		if (profile_interval < 100) {

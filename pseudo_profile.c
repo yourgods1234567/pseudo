@@ -31,11 +31,11 @@ main(int argc, char **argv) {
 			totals.processes += item.processes;
 			totals.total_ops += item.total_ops;
 			totals.messages += item.messages;
-			totals.total_time.tv_sec += item.total_time.tv_sec;
-			totals.total_time.tv_usec += item.total_time.tv_usec;
-			if (totals.total_time.tv_usec >= 1000000) {
-				++totals.total_time.tv_sec;
-				totals.total_time.tv_usec -= 1000000;
+			totals.op_time.tv_sec += item.op_time.tv_sec;
+			totals.op_time.tv_usec += item.op_time.tv_usec;
+			if (totals.op_time.tv_usec >= 1000000) {
+				++totals.op_time.tv_sec;
+				totals.op_time.tv_usec -= 1000000;
 			}
 			totals.ipc_time.tv_sec += item.ipc_time.tv_sec;
 			totals.ipc_time.tv_usec += item.ipc_time.tv_usec;
@@ -54,11 +54,11 @@ main(int argc, char **argv) {
 	printf("Found data for %d PIDs, %d processes.\n",
 		count, totals.processes);
 	printf("%lld messages for %lld ops.\n", totals.messages, totals.total_ops);
-	double ttime = totals.total_time.tv_sec + (totals.total_time.tv_usec / 1000000.0);
+	double otime = totals.op_time.tv_sec + (totals.op_time.tv_usec / 1000000.0);
 	double itime = totals.ipc_time.tv_sec + (totals.ipc_time.tv_usec / 1000000.0);
 	double wtime = totals.wrapper_time.tv_sec + (totals.wrapper_time.tv_usec / 1000000.0);
 	printf("%.4f msec wrapper time, %.4f msec op time, %.4f msec IPC time.\n",
-		wtime * 1000, ttime * 1000, itime * 1000);
+		wtime * 1000, otime * 1000, itime * 1000);
 
 	return 0;
 }
