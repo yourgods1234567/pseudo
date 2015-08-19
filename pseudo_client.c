@@ -89,9 +89,6 @@ struct timeval *pseudo_wrapper_time = &profile_data.wrapper_time;
 #endif
 static int pseudo_inited = 0;
 
-extern int (*pseudo_real_lstat)(const char *, struct stat *);
-extern int (*pseudo_real_fstat)(int, struct stat *);
-
 static int sent_messages = 0;
 
 int pseudo_nosymlinkexp = 0;
@@ -1353,7 +1350,7 @@ base_path(int dirfd, const char *path, int leave_last) {
 	if (!path)
 		return NULL;
 	if (!*path)
-		return strdup("");
+		return "";
 
 	if (path[0] != '/') {
 		if (dirfd != -1 && dirfd != AT_FDCWD) {

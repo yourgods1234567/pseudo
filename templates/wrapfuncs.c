@@ -59,11 +59,10 @@ ${maybe_async_skip}
 		pseudo_debug(PDBGF_SYSCALL, "${name} calling real syscall.\n");
 		${rc_assign} (*real_${name})(${call_args});
 	} else {
-		${alloc_paths}
+		${fix_paths}
 		/* exec*() use this to restore the sig mask */
 		pseudo_saved_sigmask = saved;
 		${rc_assign} wrap_$name(${call_args});
-		${free_paths}
 	}
 	${variadic_end}
 	save_errno = errno;
