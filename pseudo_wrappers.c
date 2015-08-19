@@ -93,6 +93,7 @@ extern int (*pseudo_real_lsetxattr)(const char *, const char *, const void *, si
 extern int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int);
 #endif
 extern int (*pseudo_real_lstat)(const char *, struct stat *);
+extern int (*pseudo_real_fstat)(int, struct stat *);
 
 static void
 _libpseudo_init(void) {
@@ -175,6 +176,7 @@ pseudo_init_wrappers(void) {
 	pseudo_real_fsetxattr = real_fsetxattr;
 #endif
 	pseudo_real_lstat = real_lstat;
+	pseudo_real_fstat = real_fstat;
 
 	/* Once the wrappers are setup, we can now use open... so
 	 * setup the logfile, if necessary...

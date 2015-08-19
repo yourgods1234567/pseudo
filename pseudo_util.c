@@ -84,6 +84,7 @@ static int pseudo_util_initted = -1;  /* Not yet run */
 
 /* bypass wrapper logic on path computations */
 int (*pseudo_real_lstat)(const char *path, struct stat *buf) = lstat;
+int (*pseudo_real_fstat)(int, struct stat *buf) = fstat;
 
 #if 0
 static void
