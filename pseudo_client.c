@@ -242,7 +242,7 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 		rc = pseudo_real_lstat(path, &buf2);
 		if (rc != -1) {
 			if (S_ISDIR(buf->st_mode) != S_ISDIR(buf2.st_mode)) {
-				pseudo_diag("FATAL: directory mismatch on path '%s'.",
+				pseudo_diag("FATAL: directory mismatch on path '%s'.\n",
 					path);
 			}
 		}
@@ -252,14 +252,14 @@ pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
 		rc = fstat(fd, &buf2);
 		if (rc != -1) {
 			if (S_ISDIR(buf->st_mode) != S_ISDIR(buf2.st_mode)) {
-				pseudo_diag("FATAL: directory mismatch on fd %d.",
+				pseudo_diag("FATAL: directory mismatch on fd %d.\n",
 					fd);
 			}
 		}
 		rc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 	}
-	pseudo_debug(PDBGF_XATTRDB, "tried to save data for %s/%d: uid %d, rc %d.\n",
-		path ? path : "<nil>", fd, (int) pseudo_db_data.uid, rc);
+	pseudo_debug(PDBGF_XATTRDB, "tried to save data for %s/%d: uid %d, mode %o, rc %d.\n",
+		path ? path : "<nil>", fd, (int) pseudo_db_data.uid, (int) pseudo_db_data.mode, rc);
 	/* none of the other fields are checked on save, and the value
 	 * is currently only really used by mknod.
 	 */

@@ -20,15 +20,10 @@
 	if (owner == (uid_t) -1 || group == (gid_t) -1) {
 		msg = pseudo_client_op(OP_STAT, 0, fd, -1, NULL, &buf);
 		/* copy in any existing values... */
-		if (msg) {
-			if (msg->result == RESULT_SUCCEED) {
-				pseudo_stat_msg(&buf, msg);
-			} else {
-				pseudo_debug(PDBGF_FILE, "fchown fd %d, ino %llu, unknown file.\n",
-					fd, (unsigned long long) buf.st_ino);
-			}
+		if (msg && msg->result == RESULT_SUCCEED) {
+			pseudo_stat_msg(&buf, msg);
 		} else {
-			pseudo_diag("stat within chown of fd %d [%llu] failed.\n",
+			pseudo_debug(PDBGF_FILE, "fchown fd %d, ino %llu, unknown file.\n",
 				fd, (unsigned long long) buf.st_ino);
 		}
 	}
