@@ -16,7 +16,6 @@
         if (antimagic == 0) {
 		char *path_guess = pseudo_exec_path(file, 0);
                 pseudo_client_op(OP_EXEC, PSA_EXEC, -1, -1, path_guess, 0);
-		free(path_guess);
         }
 
 	new_environ = pseudo_setupenvp(envp);

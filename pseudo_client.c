@@ -1922,18 +1922,15 @@ pseudo_exec_path(const char *filename, int search_path) {
 				pseudo_diag("couldn't allocate intermediate path.\n");
 				candidate = NULL;
 			}
-			free(dir);
 		}
 		if (candidate && !stat(candidate, &buf) && !S_ISDIR(buf.st_mode) && (buf.st_mode & 0111)) {
 			pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "exec_path: %s => %s\n", filename, candidate);
 			pseudo_magic();
 			return candidate;
-		} else {
-			free(candidate);
 		}
 	}
 	/* blind guess being as good as anything */
 	pseudo_magic();
-	return strdup(filename);
+	return filename;
 }
 
