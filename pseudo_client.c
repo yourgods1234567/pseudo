@@ -514,7 +514,8 @@ pseudo_init_client(void) {
 		pseudo_set_value("PSEUDO_ALLOW_FSYNC", env);
 	}
 	if (env) {
-		pseudo_allow_fsync = 1;
+		// stupid hack
+		// pseudo_allow_fsync = 1;
 	} else {
 		pseudo_allow_fsync = 0;
 	}
