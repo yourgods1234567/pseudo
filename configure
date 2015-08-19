@@ -78,7 +78,7 @@ do
 	else
 		maybe_prefix=$opt_prefix
 	fi
-	if [ "$maybe_prefix" == "$(pwd)" ]; then
+	if [ "$maybe_prefix" = "$(pwd)" ]; then
 		echo >&2 "ERROR: Prefix is current directory. That doesn't work."
 		exit 1
 	fi
