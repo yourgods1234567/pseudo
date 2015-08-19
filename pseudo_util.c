@@ -1055,10 +1055,8 @@ pseudo_get_prefix(char *pathname) {
 		if ((int) strlen(tmp_path) >= pseudo_path_max()) {
 			pseudo_diag("Can't expand path '%s' -- expansion exceeds %d.\n",
 				mypath, (int) pseudo_path_max());
-			free(tmp_path);
 		} else {
 			s = mypath + snprintf(mypath, pseudo_path_max(), "%s", tmp_path);
-			free(tmp_path);
 		}
 
 		while (s > (mypath + 1) && *s != '/')
