@@ -1,3 +1,6 @@
+2015-08-19:
+        * (seebs) Reduce alloc/free cycles in path computations.
+
 2015-08-17:
 	* (seebs) profiling improvements
 

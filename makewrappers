@@ -340,27 +340,17 @@ class Function:
         """present argument list for a function call"""
         return self.args.call()
 
-    def alloc_paths(self):
+    def fix_paths(self):
         """create/allocate canonical paths"""
-        alloc_paths = []
+        fix_paths = []
         for path in self.paths_to_munge:
             prefix = path[:-4]
             if prefix not in self.specific_dirfds:
                 prefix = ''
-            alloc_paths.append(
+            fix_paths.append(
                 "%s = pseudo_root_path(__func__, __LINE__, %s%s, %s, %s);" %
                 (path, prefix, self.dirfd, path, self.flags))
-        return "\n\t\t".join(alloc_paths)
-
-    def free_paths(self):
-        """free any allocated paths"""
-        free_paths = []
-        # the cast is here because free's argument isn't const qualified, but
-        # the original path may have been -- but we only GET here if the path
-        # has been overwritten.
-        for path in self.paths_to_munge:
-            free_paths.append("free((void *) %s);" % path)
-        return "\n\t\t".join(free_paths)
+        return "\n\t\t".join(fix_paths)
 
     def real_predecl(self):
         if self.real_func:

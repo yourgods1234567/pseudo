@@ -37,8 +37,6 @@
         rc = real_link(oldpath, newpath);
         save_errno = errno;
         if (rc == -1) {
-                free(oldpath);
-                free(newpath);
                 errno = save_errno;
                 return rc;
         }
@@ -53,8 +51,6 @@
         if (rc2 == -1) {
                 pseudo_diag("Fatal: Tried to stat '%s' after linking it, but failed: %s.\n",
                         oldpath, strerror(errno));
-                free(oldpath);
-                free(newpath);
                 errno = ENOENT;
                 return rc;
         }
@@ -67,8 +63,6 @@
          */
         pseudo_client_op(OP_LINK, 0, -1, -1, newpath, &buf);
 
-        free(oldpath);
-        free(newpath);
         errno = save_errno;
 
 /*	return rc;

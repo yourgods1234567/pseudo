@@ -180,7 +180,7 @@ main(int argc, char *argv[]) {
 				pseudo_diag("Can't resolve path '%s'\n", optarg);
 				usage(EXIT_FAILURE);
 			}
-			opt_i = s;
+			opt_i = strdup(s);
 			break;
 		case 'l': /* log */
 			optptr += snprintf(optptr, pseudo_path_max() - (optptr - opts),
@@ -193,7 +193,7 @@ main(int argc, char *argv[]) {
 				pseudo_diag("Can't resolve move-from path '%s'\n", optarg);
 				usage(EXIT_FAILURE);
 			}
-			opt_m = s;
+			opt_m = strdup(s);
 			break;
 		case 'M': /* move to... (see also 'm') */
 			s = PSEUDO_ROOT_PATH(AT_FDCWD, optarg, 0);
@@ -201,7 +201,7 @@ main(int argc, char *argv[]) {
 				pseudo_diag("Can't resolve move-to path '%s'\n", optarg);
 				usage(EXIT_FAILURE);
 			}
-			opt_M = s;
+			opt_M = strdup(s);
 			break;
 		case 'p': /* passwd file path */
 			s = PSEUDO_ROOT_PATH(AT_FDCWD, optarg, AT_SYMLINK_NOFOLLOW);
@@ -228,7 +228,7 @@ main(int argc, char *argv[]) {
 			}
 			pseudo_set_value("PSEUDO_CHROOT", s);
 			if (o == 'r')
-				opt_r = s;
+				opt_r = strdup(s);
 			break;
 		case 'S': /* stop */
 			opt_S = 1;

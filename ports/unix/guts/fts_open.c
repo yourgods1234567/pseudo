@@ -29,6 +29,8 @@
 		rpath_argv[i] = PSEUDO_ROOT_PATH(AT_FDCWD, path_argv[i], AT_SYMLINK_NOFOLLOW);
 		if (!rpath_argv[i])
 			errored = 1;
+		else
+			rpath_argv[i] = strdup(rpath_argv[i]);
 	}
 
 	if (errored) {
