@@ -13,13 +13,11 @@
 		return NULL;
 	}
 	if ((len = strlen(rname)) >= pseudo_sys_path_max()) {
-		free(rname);
 		errno = ENAMETOOLONG;
 		return NULL;
 	}
 	if (resolved_name) {
 		memcpy(resolved_name, rname, len + 1);
-		free(rname);
 		rc = resolved_name;
 	} else {
 		rc = rname;
