@@ -37,6 +37,10 @@
 #include <pwd.h>
 #include <grp.h>
 
+#ifdef PSEUDO_XATTRDB
+#include <sys/xattr.h>
+#endif
+
 #include "pseudo.h"
 #include "pseudo_ipc.h"
 #include "pseudo_client.h"
@@ -189,6 +193,125 @@ build_passwd_paths(void)
 
 	return;
 }
+
+#ifdef PSEUDO_XATTRDB
+/* We really want to avoid calling the wrappers for these inside the
+ * implementation. pseudo_wrappers will reinitialize these after it's
+ * gotten the real_* found.
+ */
+ssize_t (*pseudo_real_lgetxattr)(const char *, const char *, void *, size_t) = lgetxattr;
+ssize_t (*pseudo_real_fgetxattr)(int, const char *, void *, size_t) = fgetxattr;
+int (*pseudo_real_lsetxattr)(const char *, const char *, const void *, size_t, int) = lsetxattr;
+int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int) = fsetxattr;
+/* Executive summary: We use an extended attribute,
+ * user.pseudo_data, to store exactly the data we would otherwise
+ * have stored in the database. Which is to say, uid, gid, mode, rdev.
+ *
+ * If we don't find a value, save an empty one with a lower version
+ * number to indicate that we don't have data to reduce round trips.
+ */
+typedef struct {
+	int version;
+	uid_t uid;
+	gid_t gid;
+	mode_t mode;
+	dev_t rdev;
+} pseudo_db_data_t;
+
+static pseudo_msg_t xattrdb_data;
+
+pseudo_msg_t *
+pseudo_xattrdb_save(int fd, const char *path, const struct stat64 *buf) {
+	int rc = -1;
+	if (!path && fd < 0)
+		return NULL;
+	if (!buf)
+		return NULL;
+	pseudo_db_data_t pseudo_db_data = {
+		.version = 1,
+		.uid = buf->st_uid,
+		.gid = buf->st_gid,
+		.mode = buf->st_mode,
+		.rdev = buf->st_rdev
+	};
+	if (path) {
+		rc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+	} else if (fd >= 0) {
+		rc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+	}
+	pseudo_debug(PDBGF_XATTRDB, "tried to save data for %s/%d: uid %d, mode %o, rc %d.\n",
+		path ? path : "<nil>", fd, (int) pseudo_db_data.uid, (int) pseudo_db_data.mode, rc);
+	/* none of the other fields are checked on save, and the value
+	 * is currently only really used by mknod.
+	 */
+	if (rc == 0) {
+		xattrdb_data.result = RESULT_SUCCEED;
+		return &xattrdb_data;
+	}
+	return NULL;
+}
+
+pseudo_msg_t *
+pseudo_xattrdb_load(int fd, const char *path, const struct stat64 *buf) {
+	int rc = -1, retryrc = -1;
+	if (!path && fd < 0)
+		return NULL;
+	/* don't try to getxattr on a thing unless we think it is
+	 * likely to work.
+	 */
+	if (buf) {
+		if (!S_ISDIR(buf->st_mode) && !S_ISREG(buf->st_mode)) {
+			return NULL;
+		}
+	}
+	pseudo_db_data_t pseudo_db_data;
+	if (path) {
+		rc = pseudo_real_lgetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
+		if (rc == -1) {
+			pseudo_db_data = (pseudo_db_data_t) { .version = 0 };
+			retryrc = pseudo_real_lsetxattr(path, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+		}
+	} else if (fd >= 0) {
+		rc = pseudo_real_fgetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data));
+		if (rc == -1) {
+			pseudo_db_data = (pseudo_db_data_t) { .version = 0 };
+			retryrc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
+		}
+	}
+	pseudo_debug(PDBGF_XATTRDB, "tried to load data for %s/%d: rc %d, version %d.\n",
+		path ? path : "<nil>", fd, rc, pseudo_db_data.version);
+	if (rc == -1 && retryrc == 0) {
+		/* there's no data, but there could have been; treat
+		 * this as an empty database result.
+		 */
+		xattrdb_data.result = RESULT_FAIL;
+		return &xattrdb_data;
+	} else if (rc == -1) {
+		/* we can't create an extended attribute, so we may have
+		 * used the database.
+		 */
+		return NULL;
+	}
+	/* Version 0 = just recording that we looked and found
+	 * nothing.
+	 * Version 1 = actually implemented.
+	 */
+	switch (pseudo_db_data.version) {
+	case 0:
+	default:
+		xattrdb_data.result = RESULT_FAIL;
+		break;
+	case 1:
+		xattrdb_data.uid = pseudo_db_data.uid;
+		xattrdb_data.gid = pseudo_db_data.gid;
+		xattrdb_data.mode = pseudo_db_data.mode;
+		xattrdb_data.rdev = pseudo_db_data.rdev;
+		xattrdb_data.result = RESULT_SUCCEED;
+		break;
+	}
+	return &xattrdb_data;
+}
+#endif
 
 #ifdef PSEUDO_PROFILING
 static int pseudo_profile_pid = -2;
@@ -1309,6 +1432,42 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		}
 	}
 
+#ifdef PSEUDO_XATTRDB
+	/* maybe use xattr instead */
+	/* note: if we use xattr, logging won't work reliably
+	 * because the server won't get messages if these work.
+	 */
+	switch (op) {
+	case OP_CHMOD:
+	case OP_CREAT:
+	case OP_FCHMOD:
+	case OP_MKDIR:
+	case OP_MKNOD:
+		{
+			/* use magic uid/gid */
+			struct stat64 bufcopy;
+			bufcopy = *buf;
+			bufcopy.st_uid = pseudo_fuid;
+			bufcopy.st_gid = pseudo_fgid;
+			result = pseudo_xattrdb_save(fd, path, &bufcopy);
+		}
+		break;
+	case OP_CHOWN:
+	case OP_FCHOWN:
+	case OP_LINK:
+		result = pseudo_xattrdb_save(fd, path, buf);
+		break;
+	case OP_FSTAT:
+	case OP_STAT:
+		result = pseudo_xattrdb_load(fd, path, buf);
+		break;
+	default:
+		break;
+	}
+	if (result)
+		goto skip_path;
+#endif
+
 	if (op == OP_RENAME) {
 		va_list ap;
 		if (!path) {
@@ -1426,6 +1585,13 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 			path = alloced_path;
 		}
 	}
+
+#ifdef PSEUDO_XATTRDB
+	/* If we were able to store things in xattr, we can easily skip
+	 * most of the fancy path computations and such.
+	 */
+	skip_path:
+#endif
 
 	if (buf)
 		pseudo_msg_stat(&msg, buf);
@@ -1555,7 +1721,10 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		pseudo_diag("error: unknown or unimplemented operator %d (%s)", op, pseudo_op_name(op));
 		break;
 	}
-	if (do_request) {
+	/* result can only be set when PSEUDO_XATTRDB resulted in a
+	 * successful store to or read from the local database.
+	 */
+	if (do_request && !result) {
 #ifdef PSEUDO_PROFILING
 		struct timeval tv1_ipc, tv2_ipc;
 #endif
@@ -1598,6 +1767,12 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	} else if (!result) {
 		pseudo_debug(PDBGF_OP, "(%d) (no request)", getpid());
 	}
+	#ifdef PSEUDO_XATTRDB
+	else {
+		pseudo_debug(PDBGF_OP, "(%d) (handled through xattrdb)", getpid());
+		pseudo_debug(PDBGF_OP, "result: %d\n", result->result);
+	}
+	#endif
 	pseudo_debug(PDBGF_OP, "\n");
 
 #ifdef PSEUDO_PROFILING

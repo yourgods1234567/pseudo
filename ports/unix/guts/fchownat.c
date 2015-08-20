@@ -36,14 +36,12 @@
 	if (owner == (uid_t) -1 || group == (gid_t) -1) {
 		msg = pseudo_client_op(OP_STAT, 0, -1, -1, path, &buf);
 		/* copy in any existing values... */
-		if (msg) {
-			if (msg->result == RESULT_SUCCEED) {
-				pseudo_stat_msg(&buf, msg);
-			} else {
-				pseudo_debug(PDBGF_FILE, "chownat to %d:%d on %d/%s, ino %llu, new file.\n",
-					owner, group, dirfd, path,
-					(unsigned long long) buf.st_ino);
-			}
+		if (msg && msg->result == RESULT_SUCCEED) {
+			pseudo_stat_msg(&buf, msg);
+		} else {
+			pseudo_debug(PDBGF_FILE, "chownat to %d:%d on %d/%s, ino %llu, new file.\n",
+				owner, group, dirfd, path,
+				(unsigned long long) buf.st_ino);
 		}
 	}
 	/* now override with arguments */

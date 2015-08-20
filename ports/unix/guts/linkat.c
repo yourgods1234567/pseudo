@@ -55,7 +55,7 @@
                 return rc;
         }
         msg = pseudo_client_op(OP_STAT, 0, -1, -1, oldpath, &buf);
-        if (msg) {
+        if (msg && msg->result == RESULT_SUCCEED) {
                 pseudo_stat_msg(&buf, msg);
         }
         /* Long story short: I am pretty sure we still want OP_LINK even
