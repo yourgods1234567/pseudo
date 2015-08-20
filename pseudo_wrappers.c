@@ -86,6 +86,15 @@ extern struct timeval *pseudo_wrapper_time;
 #define PROFILE_DONE do {} while(0)
 #endif
 
+#ifdef PSEUDO_XATTRDB
+extern ssize_t (*pseudo_real_lgetxattr)(const char *, const char *, void *, size_t);
+extern ssize_t (*pseudo_real_fgetxattr)(int, const char *, void *, size_t);
+extern int (*pseudo_real_lsetxattr)(const char *, const char *, const void *, size_t, int);
+extern int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int);
+#endif
+extern int (*pseudo_real_lstat)(const char *, struct stat *);
+extern int (*pseudo_real_fstat)(int, struct stat *);
+
 static void
 _libpseudo_init(void) {
 	pseudo_getlock();
@@ -159,6 +168,15 @@ pseudo_init_wrappers(void) {
 		}
 		done = 1;
 	}
+
+#ifdef PSEUDO_XATTRDB
+	pseudo_real_lgetxattr = real_lgetxattr;
+	pseudo_real_fgetxattr = real_fgetxattr;
+	pseudo_real_lsetxattr = real_lsetxattr;
+	pseudo_real_fsetxattr = real_fsetxattr;
+#endif
+	pseudo_real_lstat = real_lstat;
+	pseudo_real_fstat = real_fstat;
 
 	/* Once the wrappers are setup, we can now use open... so
 	 * setup the logfile, if necessary...
