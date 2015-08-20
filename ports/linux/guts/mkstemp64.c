@@ -41,7 +41,6 @@
 	}
 	/* mkstemp only changes the XXXXXX at the end. */
 	memcpy(template + len - 6, tmp_template + strlen(tmp_template) - 6, 6);
-	free(tmp_template);
 /*	return rc;
  * }
  */
