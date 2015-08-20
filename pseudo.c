@@ -1069,7 +1069,11 @@ int
 pseudo_server_response(pseudo_msg_t *msg, const char *program, const char *tag, char **response_path, size_t *response_len) {
 	switch (msg->type) {
 	case PSEUDO_MSG_PING:
-		msg->result = RESULT_SUCCEED;
+                /* mad hackery: if we aren't logging, the client gets told
+                 * not to send open/exec notifications, which have no other
+                 * purpose.
+                 */
+		msg->result = opt_l ? RESULT_SUCCEED : RESULT_FAIL;
 		if (opt_l)
 			pdb_log_msg(SEVERITY_INFO, msg, program, tag, NULL);
 		return 0;
