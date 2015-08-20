@@ -74,6 +74,7 @@ char *pseudo_cwd_rel = NULL;
 int pseudo_disabled = 0;
 int pseudo_allow_fsync = 0;
 static int pseudo_local_only = 0;
+static int pseudo_client_logging = 1;
 
 int pseudo_umask = 022;
 
@@ -1064,7 +1065,14 @@ client_ping(void) {
 		/* and that's not good, so... */
 		server_pid = 0;
 		return 1;
-	}
+	} else {
+                /* The server tells us whether or not to log things. */
+                if (ack->result == RESULT_SUCCEED) {
+                        pseudo_client_logging = 1;
+                } else {
+                        pseudo_client_logging = 0;
+                }
+        }
 	pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "ping ok\n");
 	return 0;
 }
@@ -1644,7 +1652,8 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		break;
 	case OP_OPEN:
 		pseudo_client_path(fd, path);
-		do_request = 1;
+	case OP_EXEC: /* fallthrough */
+		do_request = pseudo_client_logging;
 		break;
 	case OP_CLOSE:
 		/* no request needed */
@@ -1700,7 +1709,6 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		 * (operations which can create should be CREAT or MKNOD
 		 * or MKDIR)
 		 */
-	case OP_EXEC:
 	case OP_CHOWN:
 	case OP_FCHOWN:
 	case OP_FSTAT:

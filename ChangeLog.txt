@@ -1,3 +1,6 @@
+2015-08-20:
+        * (seebs) don't send open/exec messages unless server is logging.
+
 2015-08-19:
         * (seebs) Reduce alloc/free cycles in path computations.
 
