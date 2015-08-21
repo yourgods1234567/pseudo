@@ -896,7 +896,19 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		 * case where there might be a clash.
 		 */
 		if (found_ino || found_path) {
-			*msg = db_header;
+			#ifdef PSEUDO_XATTRDB
+			if (db_header.uid == (uid_t) -1 &&
+			    db_header.gid == (gid_t) -1) {
+				/* special case: this row was created
+				 * to allow xattr lookups, and it's not
+				 * actually valid data.
+				 */
+				msg->result = RESULT_FAIL;
+			} else
+			#endif
+			{
+				*msg = db_header;
+			}
 		} else {
 			msg->result = RESULT_FAIL;
 		}
@@ -1036,6 +1048,14 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 	case OP_SET_XATTR:
 		/* we need a row entry to store xattr info */
 		if (row == -1) {
+#ifdef PSEUDO_XATTRDB
+			/* mark the entry as Not Reliable for purposes
+			 * of stat-type calls, since changes wouldn't
+			 * get reported to us.
+			 */
+			msg->uid = (uid_t) -1;
+			msg->gid = (gid_t) -1;
+#endif
 			pdb_link_file(msg, &row);
 		}
 		if (pdb_set_xattr(row, oldpath, oldpathlen, xattr_flags)) {
