@@ -1872,7 +1872,7 @@ populate_path_segs(void) {
 	path_lens[c] = 0;
 }
 
-char *
+const char *
 pseudo_exec_path(const char *filename, int search_path) {
 	char *path = getenv("PATH");
 	char *candidate;
