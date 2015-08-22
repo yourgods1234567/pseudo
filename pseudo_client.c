@@ -279,12 +279,14 @@ pseudo_xattrdb_load(int fd, const char *path, const struct stat64 *buf) {
 			retryrc = pseudo_real_fsetxattr(fd, "user.pseudo_data", &pseudo_db_data, sizeof(pseudo_db_data), 0);
 		}
 	}
-	pseudo_debug(PDBGF_XATTRDB, "tried to load data for %s/%d: rc %d, version %d.\n",
+	pseudo_debug(PDBGF_XATTRDB, "tried to load data for %s[%d]: rc %d, version %d.\n",
 		path ? path : "<nil>", fd, rc, pseudo_db_data.version);
 	if (rc == -1 && retryrc == 0) {
 		/* there's no data, but there could have been; treat
 		 * this as an empty database result.
 		 */
+		pseudo_debug(PDBGF_XATTRDB, "wrote version 0 for %s[%d]\n",
+			path ? path : "<nil>", fd);
 		xattrdb_data.result = RESULT_FAIL;
 		return &xattrdb_data;
 	} else if (rc == -1) {
@@ -1815,8 +1817,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	}
 	#ifdef PSEUDO_XATTRDB
 	else {
-		pseudo_debug(PDBGF_OP, "(%d) (handled through xattrdb)", getpid());
-		pseudo_debug(PDBGF_OP, "result: %d\n", result->result);
+		pseudo_debug(PDBGF_OP, "(%d) (handled through xattrdb: %s)", getpid(), pseudo_res_name(result->result));
 	}
 	#endif
 	pseudo_debug(PDBGF_OP, "\n");

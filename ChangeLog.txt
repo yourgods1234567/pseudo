@@ -2,6 +2,7 @@
 	* (seebs) Prevent files from getting created with real filesystem
 	  mode 0, even with umask.
 	* (seebs) xattrdb logic fixes.
+	* (seebs) Debugging messages.
 
 2015-08-21:
 	* (seebs) don't put incorrect host UIDs in dummy entries in db.

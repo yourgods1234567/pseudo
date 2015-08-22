@@ -824,6 +824,8 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			pdb_unlink_file_dev(&by_ino);
 		}
 		if (!found_path) {
+			pseudo_debug(PDBGF_DB, "linking %s for OP_CREAT\n",
+				msg->pathlen ? msg->path : "no path");
 			pdb_link_file(msg, NULL);
 		} else {
 			/* again, an error, but leaving it alone for now. */
@@ -857,6 +859,8 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		 */
 		if (!found_path && !found_ino) {
 			pseudo_debug(PDBGF_FILE, "(new) ");
+			pseudo_debug(PDBGF_DB, "linking %s for OP_[F]CHMOD\n",
+				msg->pathlen ? msg->path : "no path");
 			pdb_link_file(msg, NULL);
 		}
 		break;
@@ -887,6 +891,8 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		 */
 		if (!found_path && !found_ino) {
 			pseudo_debug(PDBGF_FILE, "(new) ");
+			pseudo_debug(PDBGF_DB, "linking %s for OP_[F]CHOWN\n",
+				msg->pathlen ? msg->path : "no path");
 			pdb_link_file(msg, NULL);
 		}
 		break;
@@ -954,6 +960,9 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		} else {
 			*msg = msg_header;
 		}
+		pseudo_debug(PDBGF_DB, "linking %s for %s\n",
+			msg->pathlen ? msg->path : "no path",
+			pseudo_op_name(msg->op));
 		pdb_link_file(msg, NULL);
 		break;
 	case OP_RENAME:
@@ -1016,6 +1025,9 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			pdb_unlink_file_dev(&by_ino);
 		}
 		*msg = msg_header;
+		pseudo_debug(PDBGF_DB, "linking %s for %s\n",
+			msg->pathlen ? msg->path : "no path",
+			pseudo_op_name(msg->op));
 		pdb_link_file(msg, NULL);
 		break;
 	case OP_GET_XATTR:
@@ -1056,6 +1068,9 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			msg->uid = (uid_t) -1;
 			msg->gid = (gid_t) -1;
 #endif
+			pseudo_debug(PDBGF_DB, "linking %s (uid -1 if xattr) for %s\n",
+				msg->pathlen ? msg->path : "no path",
+				pseudo_op_name(msg->op));
 			pdb_link_file(msg, &row);
 		}
 		if (pdb_set_xattr(row, oldpath, oldpathlen, xattr_flags)) {
