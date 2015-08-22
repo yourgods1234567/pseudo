@@ -19,6 +19,7 @@
 		pseudo_debug(PDBGF_OP, "fopen '%s': fd %d <FILE %p>\n", path, fd, (void *) rc);
 		if (base_fstat(fd, &buf) != -1) {
 			if (!existed) {
+				real_fchmod(fd, PSEUDO_FS_MODE(0600, 0));
 				pseudo_client_op(OP_CREAT, 0, -1, -1, path, &buf);
 			}
 			pseudo_client_op(OP_OPEN, pseudo_access_fopen(mode), fd, -1, path, &buf);

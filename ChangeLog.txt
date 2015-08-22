@@ -1,3 +1,12 @@
+2015-08-22:
+	* (seebs) Prevent files from getting created with real filesystem
+	  mode 0, even with umask.
+	* (seebs) xattrdb logic fixes.
+
+2015-08-21:
+	* (seebs) don't put incorrect host UIDs in dummy entries in db.
+	* (seebs) merge existing values for chown/chmod with xattrdb.
+
 2015-08-20:
         * (seebs) don't send open/exec messages unless server is logging.
 

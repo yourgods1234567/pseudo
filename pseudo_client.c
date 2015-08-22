@@ -1441,39 +1441,77 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	}
 
 #ifdef PSEUDO_XATTRDB
-	/* maybe use xattr instead */
-	/* note: if we use xattr, logging won't work reliably
-	 * because the server won't get messages if these work.
-	 */
-	switch (op) {
-	case OP_CHMOD:
-	case OP_CREAT:
-	case OP_FCHMOD:
-	case OP_MKDIR:
-	case OP_MKNOD:
-		{
-			/* use magic uid/gid */
-			struct stat64 bufcopy;
+	if (buf) {
+		struct stat64 bufcopy = *buf;
+		int do_save = 0;
+		/* maybe use xattr instead */
+		/* note: if we use xattr, logging won't work reliably
+		 * because the server won't get messages if these work.
+		 */
+		switch (op) {
+		case OP_CHMOD:
+		case OP_FCHMOD:
+		case OP_CHOWN:
+		case OP_FCHOWN:
+			/* for these, we want to start with the existing db
+			 * values.
+			 */
 			bufcopy = *buf;
+			result = pseudo_xattrdb_load(fd, path, buf);
+			if (result && result->result == RESULT_SUCCEED) {
+				pseudo_debug(PDBGF_XATTR, "merging existing values for xattr\n");
+				switch (op) {
+				case OP_CHMOD:
+				case OP_FCHMOD:
+					bufcopy.st_uid = result->uid;
+					bufcopy.st_gid = result->gid;
+					break;
+				case OP_CHOWN:
+				case OP_FCHOWN:
+					bufcopy.st_rdev = result->rdev;
+					bufcopy.st_mode = result->mode;
+					break;
+				default:
+					break;
+				}
+				
+			} else {
+				switch (op) {
+				case OP_CHMOD:
+				case OP_FCHMOD:
+					bufcopy.st_uid = pseudo_fuid;
+					bufcopy.st_gid = pseudo_fgid;
+					break;
+				default:
+					break;
+				}
+			}
+			result = NULL;
+			do_save = 1;
+			break;
+		case OP_CREAT:
+		case OP_MKDIR:
+		case OP_MKNOD:
 			bufcopy.st_uid = pseudo_fuid;
 			bufcopy.st_gid = pseudo_fgid;
+			do_save = 1;
+			break;
+		case OP_LINK:
+			do_save = 1;
+			break;
+		case OP_FSTAT:
+		case OP_STAT:
+			result = pseudo_xattrdb_load(fd, path, buf);
+			break;
+		default:
+			break;
+		}
+		if (do_save) {
 			result = pseudo_xattrdb_save(fd, path, &bufcopy);
 		}
-		break;
-	case OP_CHOWN:
-	case OP_FCHOWN:
-	case OP_LINK:
-		result = pseudo_xattrdb_save(fd, path, buf);
-		break;
-	case OP_FSTAT:
-	case OP_STAT:
-		result = pseudo_xattrdb_load(fd, path, buf);
-		break;
-	default:
-		break;
+		if (result)
+			goto skip_path;
 	}
-	if (result)
-		goto skip_path;
 #endif
 
 	if (op == OP_RENAME) {
