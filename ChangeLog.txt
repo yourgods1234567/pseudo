@@ -1,3 +1,11 @@
+2015-08-24:
+        * (seebs) drop unused/unimplemented "picky_fchmodat", since I
+          currently have no systems which implement it, and the implementation
+          for NO_REAL_AT_FUNCTIONS was difficult to define.
+        * (seebs) drop unused "doing_link" in fchownat, which I think predates
+          the current database entirely.
+        * (seebs) drop unused "old_trailing_slash".
+
 2015-08-22:
 	* (seebs) Prevent files from getting created with real filesystem
 	  mode 0, even with umask.

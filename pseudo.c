@@ -497,7 +497,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 	int found_path = 0, found_ino = 0;
 	int prefer_ino = 0;
 	int xattr_flags = 0;
-	int trailing_slash = 0, old_trailing_slash = 0;
+	int trailing_slash = 0;
 
 	if (!msg)
 		return 1;
@@ -548,7 +548,6 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			if (oldpathlen > 0 && msg->op == OP_RENAME) {
 				if (oldpath[oldpathlen - 1] == '/') {
 					oldpath[--oldpathlen] = '\0';
-					old_trailing_slash = 1;
 				}
 			}
 			/* if we got an oldpath, but a 0-length initial

@@ -9,7 +9,6 @@
  	pseudo_msg_t *msg;
 	PSEUDO_STATBUF buf;
 	int save_errno = errno;
-	int doing_link = 0;
 
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
 	if (dirfd != AT_FDCWD) {
@@ -26,10 +25,6 @@
 #endif
 	if (rc == -1) {
 		return rc;
-	}
-	/* pseudo won't track the ownership, here */
-	if (S_ISLNK(buf.st_mode)) {
-		doing_link = 1;
 	}
 	save_errno = errno;
 
