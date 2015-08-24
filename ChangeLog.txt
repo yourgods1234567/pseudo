@@ -5,6 +5,7 @@
         * (seebs) drop unused "doing_link" in fchownat, which I think predates
           the current database entirely.
         * (seebs) drop unused "old_trailing_slash".
+	* (seebs) tag this as 1.7.0.
 
 2015-08-22:
 	* (seebs) Prevent files from getting created with real filesystem
