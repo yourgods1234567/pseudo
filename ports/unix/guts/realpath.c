@@ -20,7 +20,7 @@
 		memcpy(resolved_name, rname, len + 1);
 		rc = resolved_name;
 	} else {
-		rc = rname;
+		rc = strdup(rname);
 	}
 
 /*	return rc;

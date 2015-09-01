@@ -2,6 +2,8 @@
 	* (seebs) use PSEUDO_STATBUF and base_lstat in path resolution, because
 	  plain lstat can fail on XFS if an inode number is out of the 32-bit
 	  range.
+	* (seebs) if no pointer was provided to realpath, provide allocated
+	  dup.
 
 2015-08-24:
         * (seebs) drop unused/unimplemented "picky_fchmodat", since I
