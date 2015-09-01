@@ -1,3 +1,8 @@
+2015-09-01:
+	* (seebs) use PSEUDO_STATBUF and base_lstat in path resolution, because
+	  plain lstat can fail on XFS if an inode number is out of the 32-bit
+	  range.
+
 2015-08-24:
         * (seebs) drop unused/unimplemented "picky_fchmodat", since I
           currently have no systems which implement it, and the implementation

@@ -83,8 +83,7 @@ static struct pseudo_variables pseudo_env[] = {
 static int pseudo_util_initted = -1;  /* Not yet run */
 
 /* bypass wrapper logic on path computations */
-int (*pseudo_real_lstat)(const char *path, struct stat *buf) = lstat;
-int (*pseudo_real_fstat)(int, struct stat *buf) = fstat;
+int (*pseudo_real_lstat)(const char *path, PSEUDO_STATBUF *buf) = NULL;
 
 #if 0
 static void
@@ -473,7 +472,7 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 	static int link_recursion = 0;
 	size_t curlen;
 	char *current;
-	struct stat buf;
+	PSEUDO_STATBUF buf;
 	if (!newpath ||
 	    !pcurrent || !*pcurrent ||
 	    !root || !element) {
@@ -516,7 +515,7 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 	/* if lstat fails, that's fine -- nonexistent files aren't symlinks */
 	if (!leave_this) {
 		int is_link;
-		is_link = (pseudo_real_lstat(newpath, &buf) != -1) && S_ISLNK(buf.st_mode);
+		is_link = (pseudo_real_lstat) && (pseudo_real_lstat(newpath, &buf) != -1) && S_ISLNK(buf.st_mode);
 		if (link_recursion >= PSEUDO_MAX_LINK_RECURSION && is_link) {
 			pseudo_diag("link recursion too deep, not expanding path '%s'.\n", newpath);
 			is_link = 0;
