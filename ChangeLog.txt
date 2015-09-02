@@ -1,3 +1,7 @@
+2015-09-02:
+	* (seebs) call this 1.7.1, since that seems to be all the bugs
+	  I can immediately find.
+
 2015-09-01:
 	* (seebs) use PSEUDO_STATBUF and base_lstat in path resolution, because
 	  plain lstat can fail on XFS if an inode number is out of the 32-bit
