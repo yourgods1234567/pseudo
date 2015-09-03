@@ -37,6 +37,7 @@
 	if (rc == -1) {
 		return -1;
 	}
+	real_fchmod(rc, PSEUDO_FS_MODE(mode, 0));
 	base_fstat(rc, &buf);
 	/* mknod does not really open the file.  We don't have
 	 * to use wrap_close because we've never exposed this file

@@ -83,9 +83,6 @@ extern int pseudo_umask;
  * When doing anything which actually writes to the filesystem, we add in
  * the user read/write/execute bits.  When storing to the database, though,
  * we mask out any such bits which weren't in the original mode.
- *
- * None of this will behave very sensibly if umask has 0700 bits in it;
- * this is a known limitation.
  */
 #define PSEUDO_FS_MODE(mode, isdir) (((mode) | S_IRUSR | S_IWUSR | ((isdir) ? S_IXUSR : 0)) & ~(S_IWGRP | S_IWOTH))
 #define PSEUDO_DB_MODE(fs_mode, user_mode) (((fs_mode) & ~0722) | ((user_mode & 0722)))

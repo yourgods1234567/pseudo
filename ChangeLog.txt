@@ -1,3 +1,9 @@
+2015-09-03:
+	* (seebs) Use original mode, not 0600, for the chmods used to
+	  ensure that an 0700 umask didn't prevent writing.
+	* (seebs) remove the comment saying that 0700 umasks were expected
+	  to break things.
+
 2015-09-02:
 	* (seebs) call this 1.7.1, since that seems to be all the bugs
 	  I can immediately find.

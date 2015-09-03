@@ -41,7 +41,7 @@
 		if (stat_rc != -1) {
 			buf.st_mode = PSEUDO_DB_MODE(buf.st_mode, mode);
 			if (!existed) {
-				real_fchmod(rc, PSEUDO_FS_MODE(0600, 0));
+				real_fchmod(rc, PSEUDO_FS_MODE(mode, 0));
 				pseudo_client_op(OP_CREAT, 0, -1, -1, path, &buf);
 			}
 			pseudo_client_op(OP_OPEN, PSEUDO_ACCESS(flags), rc, -1, path, &buf);
