@@ -1,5 +1,9 @@
 2015-09-04:
 	* (seebs) add return value printing to wrapper debug!
+	* (seebs) make mkdirat() restore errno, also don't pass
+	  AT_SYMLINK_NOFOLLOW to fchmodat() since it is ignored, and
+	  we know that if the thing exists at all, it is a directory
+	  and thus AT_SYMLINK_NOFOLLOW would be irrelevant anyway.
 
 2015-09-03:
 	* (seebs) Use original mode, not 0600, for the chmods used to

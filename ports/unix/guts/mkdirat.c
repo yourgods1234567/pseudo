@@ -21,6 +21,7 @@
 	if (rc != -1) {
 		PSEUDO_STATBUF buf;
 		int stat_rc;
+		int save_errno = errno;
 
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
 		stat_rc = base_lstat(path, &buf);
@@ -33,12 +34,13 @@
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
 			real_fchmod(path, PSEUDO_FS_MODE(mode, 1));
 #else
-			real_fchmodat(dirfd, path, PSEUDO_FS_MODE(mode, 1), AT_SYMLINK_NOFOLLOW);
+			real_fchmodat(dirfd, path, PSEUDO_FS_MODE(mode, 1), 0);
 #endif
 		} else {
 			pseudo_debug(PDBGF_OP, "mkdir of %s succeeded, but stat failed: %s\n",
 				path, strerror(errno));
 		}
+		errno = save_errno;
 	}
 
 /*	return rc;

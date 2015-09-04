@@ -33,6 +33,7 @@
 	if (rc == -1) {
 		return -1;
 	}
+	save_errno = errno;
 	rc = base_stat(path, &buf);
 	real_chmod(path, PSEUDO_FS_MODE(mode, 0));
 #else
@@ -40,8 +41,9 @@
 	if (rc == -1) {
 		return -1;
 	}
+	save_errno = errno;
 	rc = base_fstatat(dirfd, path, &buf, AT_SYMLINK_NOFOLLOW);
-	real_fchmodat(dirfd, path, PSEUDO_FS_MODE(mode, 0), AT_SYMLINK_NOFOLLOW);
+	real_fchmodat(dirfd, path, PSEUDO_FS_MODE(mode, 0), 0);
 #endif
 	/* if the stat failed, we are going to give up and nuke
 	 * any file we may have created, and hope for the best.
