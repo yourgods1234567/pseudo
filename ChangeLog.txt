@@ -3,6 +3,7 @@
 	  ensure that an 0700 umask didn't prevent writing.
 	* (seebs) remove the comment saying that 0700 umasks were expected
 	  to break things.
+	* (seebs) and call this 1.7.2.
 
 2015-09-02:
 	* (seebs) call this 1.7.1, since that seems to be all the bugs
