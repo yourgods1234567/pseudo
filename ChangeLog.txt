@@ -1,3 +1,6 @@
+2015-09-04:
+	* (seebs) add return value printing to wrapper debug!
+
 2015-09-03:
 	* (seebs) Use original mode, not 0600, for the chmods used to
 	  ensure that an 0700 umask didn't prevent writing.

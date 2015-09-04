@@ -73,9 +73,9 @@ ${maybe_async_skip}
 /* This can cause hangs on some recentish systems which use locale
  * stuff for strerror...
  */
-	pseudo_debug(PDBGF_WRAPPER, "wrapper completed: ${name} (maybe: %s)\n", strerror(save_errno));
+	pseudo_debug(PDBGF_WRAPPER, "wrapper completed: ${name} returns ${rc_format} (errno: %s)\n", ${rc_value}, strerror(save_errno));
 #endif
-	pseudo_debug(PDBGF_WRAPPER, "wrapper completed: ${name} (errno: %d)\n", save_errno);
+	pseudo_debug(PDBGF_WRAPPER, "wrapper completed: ${name} returns ${rc_format} (errno: %d)\n", ${rc_value}, save_errno);
 	errno = save_errno;
 	PROFILE_DONE;
 	${rc_return}

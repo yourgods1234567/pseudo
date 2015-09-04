@@ -195,6 +195,26 @@ class Argument:
     def __repr__(self):
         return self.decl()
 
+typedata = {
+  'char *': { 'format': '%s', 'value': 'rc ? rc : "<nil>"' },
+  'const char *': { 'format': '%s', 'value': 'rc ? rc : "<nil>"' },
+  'DIR *': { 'format': '%p', 'value': '(void *) rc' },
+  'FILE *': { 'format': '%p', 'value': '(void *) rc' },
+  'FTS *': { 'format': '%p', 'value': '(void *) rc' },
+  'gid_t': { 'format': '%ld', 'value': ' (long) rc' },
+  'int': { 'format': '%d', 'value': 'rc' },
+  'long': { 'format': '%ld', 'value': 'rc' },
+  'mode_t': { 'format': '0%lo', 'value': '(long) rc' },
+  'off_t': { 'format': '%lld', 'value': '(long long) rc' },
+  'size_t': { 'format': '%lu', 'value': '(unsigned long) rc' },
+  'ssize_t': { 'format': '%ld', 'value': '(long) rc' },
+  'struct group *': { 'format': '%p', 'value': '(void *) rc' },
+  'struct passwd *': { 'format': '%p', 'value': '(void *) rc' },
+  'uid_t': { 'format': '%ld', 'value': ' (long) rc' },
+  'void *': { 'format': '%p', 'value': 'rc' },
+  'void': { 'format': 'void%s', 'value': '""' },
+}
+
 class Function:
     """A function signature and additional data about how the function works"""
     def __init__(self, port, line):
@@ -370,6 +390,14 @@ class Function:
             return "return;"
         else:
             return "return rc;"
+
+    def rc_format(self):
+        """the format string to use for the return value"""
+	return typedata.get(self.type, { 'format': '[%s]', 'value': '"' + self.type + '"' })['format']
+
+    def rc_value(self):
+        """the value to pass for the format string for the return value"""
+	return typedata.get(self.type, { 'format': '[%s]', 'value': '"' + self.type + '"' })['value']
 
     def rc_decl(self):
         """declare rc (if needed)"""
