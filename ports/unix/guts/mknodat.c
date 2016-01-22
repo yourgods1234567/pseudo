@@ -12,6 +12,12 @@
 
 	/* mask out mode bits appropriately */
 	mode = mode & ~pseudo_umask;
+        /* if you don't specify a type, assume regular file */
+        if (!(mode & S_IFMT)) {
+                mode |= S_IFREG;
+        }
+        pseudo_debug(PDBGF_FILE, "mknodat creating '%s', mode 0%o\n",
+                path ? path : "<no name>", (int) mode);
 
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
 	if (dirfd != AT_FDCWD) {

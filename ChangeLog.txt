@@ -1,3 +1,6 @@
+2016-01-22:
+        * (seebs) Mask in S_IFREG when mknod called with no S_IFMT bits.
+
 2015-09-22:
 	* (seebs) Fix modes after fopen/fopen64.
 

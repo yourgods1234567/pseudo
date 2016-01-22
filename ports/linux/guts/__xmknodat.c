@@ -11,6 +11,12 @@
 
 	/* mask out mode bits appropriately */
 	mode = mode & ~pseudo_umask;
+        /* if you don't specify a type, assume regular file */
+        if (!(mode & S_IFMT)) {
+                mode |= S_IFREG;
+        }
+        pseudo_debug(PDBGF_FILE, "xmknodat creating '%s', mode 0%o\n",
+                path ? path : "<no name>", (int) mode);
 
 	/* we don't use underlying call, so _ver is irrelevant to us */
 	(void) ver;

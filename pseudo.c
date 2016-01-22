@@ -1067,9 +1067,10 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			msg->uid = (uid_t) -1;
 			msg->gid = (gid_t) -1;
 #endif
-			pseudo_debug(PDBGF_DB, "linking %s (uid -1 if xattr) for %s\n",
+			pseudo_debug(PDBGF_DB | PDBGF_XATTR, "linking %s (uid -1 if xattr) for %s, mode 0%o\n",
 				msg->pathlen ? msg->path : "no path",
-				pseudo_op_name(msg->op));
+				pseudo_op_name(msg->op),
+                                (int) msg->mode);
 			pdb_link_file(msg, &row);
 		}
 		if (pdb_set_xattr(row, oldpath, oldpathlen, xattr_flags)) {
