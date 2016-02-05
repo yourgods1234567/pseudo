@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <time.h>
 #include <unistd.h>
 #include <errno.h>
 #include <sys/socket.h>
@@ -1200,7 +1201,11 @@ pseudo_client_setup(void) {
 	}
 	pseudo_debug(PDBGF_CLIENT, "server seems to be gone, trying to restart\n");
 	if (client_spawn_server()) {
-		pseudo_debug(PDBGF_CLIENT, "failed to spawn server, giving up.\n");
+		int ms = (getpid() % 5) + 3;
+		struct timespec delay = { .tv_sec = 0, .tv_nsec = ms * 1000000 };
+		nanosleep(&delay, NULL);
+
+		pseudo_debug(PDBGF_CLIENT, "failed to spawn server, waiting for retry.\n");
 		return 1;
 	} else {
 		pseudo_debug(PDBGF_CLIENT, "restarted, new pid %d\n", server_pid);
@@ -1208,7 +1213,7 @@ pseudo_client_setup(void) {
 			return 0;
 		}
 	}
-	pseudo_debug(PDBGF_CLIENT, "couldn't get a server, giving up.\n");
+	pseudo_debug(PDBGF_CLIENT, "couldn't get or spawn a server.\n");
 	return 1;
 }
 
@@ -1231,13 +1236,13 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 					rc,
 					rc == -1 ? " (sigpipe)" :
 					           " (short write)");
-				pseudo_debug(PDBGF_CLIENT, "trying to get server\n");
-				pseudo_client_setup();
 				++tries;
 				if (tries > 3) {
 					pseudo_debug(PDBGF_CLIENT, "Can't get server going again.\n");
 					return 0;
 				}
+				pseudo_debug(PDBGF_CLIENT, "trying to get server, try %d\n", tries);
+				pseudo_client_setup();
 			}
 		} while (rc != 0);
 		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sent!\n");
