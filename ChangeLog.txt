@@ -1,6 +1,7 @@
 2016-02-05:
 	* (seebs) don't abort search for server on first try.
         * (seebs) new clients cancel a shutdown request.
+        * (seebs) sort xattrs when returning list.
 
 2016-01-22:
         * (seebs) Mask in S_IFREG when mknod called with no S_IFMT bits.

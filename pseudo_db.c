@@ -2235,7 +2235,7 @@ pdb_list_xattr(long long file_id, char **value, size_t *len) {
 	size_t used = 0;
 	char *buffer = 0;
 	int rc;
-	char *sql = "SELECT name FROM xattrs WHERE file_id = ?;";
+	char *sql = "SELECT name FROM xattrs WHERE file_id = ? ORDER BY name;";
 
 	/* if we don't have a record of the file, it must not have
 	 * any extended attributes...
