@@ -474,7 +474,7 @@ pseudo_server_loop(void) {
 				if (die_forcefully)
 					break;
 			}
-			if (!(die_peacefully || die_forcefully) && 
+			if (!die_forcefully && 
 			    (FD_ISSET(clients[0].fd, &events) ||
 			     FD_ISSET(clients[0].fd, &reads))) {
 				len = sizeof(client);
@@ -482,6 +482,11 @@ pseudo_server_loop(void) {
 					pseudo_debug(PDBGF_SERVER, "new client fd %d\n", fd);
 					open_client(fd);
 				}
+                                /* A new client implicitly cancels a previous
+                                 * shutdown request.
+                                 */
+                                pseudo_server_timeout = 30;
+                                die_peacefully = 0;
 			}
 			pseudo_debug(PDBGF_SERVER, "server loop complete [%d clients left]\n", active_clients);
 		}
