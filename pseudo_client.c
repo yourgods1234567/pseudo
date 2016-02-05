@@ -1225,18 +1225,13 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 		do {
 			pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sending a message: ino %llu\n",
 				(unsigned long long) msg->ino);
-			if (connect_fd < 0) {
-				pseudo_debug(PDBGF_CLIENT, "trying to get server\n");
-				if (pseudo_client_setup()) {
-					return 0;
-				}
-			}
 			rc = pseudo_msg_send(connect_fd, msg, len, path);
 			if (rc != 0) {
 				pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "msg_send: %d%s\n",
 					rc,
 					rc == -1 ? " (sigpipe)" :
 					           " (short write)");
+				pseudo_debug(PDBGF_CLIENT, "trying to get server\n");
 				pseudo_client_setup();
 				++tries;
 				if (tries > 3) {
