@@ -1,3 +1,6 @@
+2016-02-08:
+        * (seebs) require -S to shutdown server when running a command.
+
 2016-02-05:
 	* (seebs) don't abort search for server on first try.
         * (seebs) new clients cancel a shutdown request.

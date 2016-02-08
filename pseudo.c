@@ -343,7 +343,8 @@ main(int argc, char *argv[]) {
 		return pseudo_db_check(opt_B);
 	}
 
-	if (opt_S) {
+        /* If you didn't specify a command, opt_S shuts down here. */
+	if (opt_S && argc <= optind) {
 		return pseudo_client_shutdown();
 	}
 
@@ -418,7 +419,9 @@ main(int argc, char *argv[]) {
 			/* try to hint that we don't think we still need
 			 * the server.
 			 */
-			pseudo_client_shutdown();
+                        if (opt_S) {
+				pseudo_client_shutdown();
+                        }
 			return WEXITSTATUS(rc);
 		} else {
 			rc = execv(fullpath, argv);
