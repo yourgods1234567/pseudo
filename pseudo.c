@@ -422,7 +422,14 @@ main(int argc, char *argv[]) {
                         if (opt_S) {
 				pseudo_client_shutdown();
                         }
-			return WEXITSTATUS(rc);
+			if (WIFEXITED(rc)) {
+				return WEXITSTATUS(rc);
+			} else if (WIFSIGNALED(rc)) {
+				kill(getpid(), WTERMSIG(rc));
+				exit(1);
+			} else {
+				exit(1);
+			}
 		} else {
 			rc = execv(fullpath, argv);
 			if (rc == -1) {

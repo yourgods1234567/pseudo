@@ -1270,7 +1270,7 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 			return 0;
 		}
 	}
-	pseudo_debug(PDBGF_CLIENT, "server connection persistently failed, aborting.\n");
+	pseudo_diag("pseudo: server connection persistently failed, aborting.\n");
 	abort();
 	return 0;
 }
