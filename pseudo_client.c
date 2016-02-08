@@ -1201,9 +1201,6 @@ pseudo_client_setup(void) {
 	}
 	pseudo_debug(PDBGF_CLIENT, "server seems to be gone, trying to restart\n");
 	if (client_spawn_server()) {
-		int ms = (getpid() % 5) + 3;
-		struct timespec delay = { .tv_sec = 0, .tv_nsec = ms * 1000000 };
-		nanosleep(&delay, NULL);
 
 		pseudo_debug(PDBGF_CLIENT, "failed to spawn server, waiting for retry.\n");
 		return 1;
@@ -1217,6 +1214,7 @@ pseudo_client_setup(void) {
 	return 1;
 }
 
+#define PSEUDO_RETRIES 50
 static pseudo_msg_t *
 pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 	pseudo_msg_t *response = 0;
@@ -1226,46 +1224,55 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 	if (!msg)
 		return 0;
 
-	do {
-		do {
-			pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sending a message: ino %llu\n",
-				(unsigned long long) msg->ino);
-			rc = pseudo_msg_send(connect_fd, msg, len, path);
-			if (rc != 0) {
-				pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "msg_send: %d%s\n",
-					rc,
-					rc == -1 ? " (sigpipe)" :
-					           " (short write)");
-				++tries;
-				if (tries > 3) {
-					pseudo_debug(PDBGF_CLIENT, "Can't get server going again.\n");
-					return 0;
-				}
-				pseudo_debug(PDBGF_CLIENT, "trying to get server, try %d\n", tries);
-				pseudo_client_setup();
+	/* Try to send a message. If sending fails, try to spawn a server,
+	 * and whether or not we succeed, wait a little bit and retry sending.
+	 * It's okay if we can't start a server sometimes, because another
+	 * client may have done it.
+	 */
+        for (tries = 0; tries < PSEUDO_RETRIES; ++tries) {
+		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sending a message: ino %llu\n",
+			(unsigned long long) msg->ino);
+		rc = pseudo_msg_send(connect_fd, msg, len, path);
+		if (rc != 0) {
+			pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "msg_send: %d%s\n",
+				rc,
+				rc == -1 ? " (sigpipe)" :
+					   " (short write)");
+			pseudo_debug(PDBGF_CLIENT, "trying to get server, try %d\n", tries);
+			/* try to open server; if we fail, wait a bit before
+			 * retry.
+			 */
+			if (pseudo_client_setup()) {
+				int ms = (getpid() % 5) + 3 + tries;
+				struct timespec delay = { .tv_sec = 0, .tv_nsec = ms * 1000000 };
+				nanosleep(&delay, NULL);
 			}
-		} while (rc != 0);
+			continue;
+		}
+		/* note "continue" above; we only get here if rc was 0,
+		 * indicating a successful send.
+		 */
 		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sent!\n");
-                if (msg->type != PSEUDO_MSG_FASTOP) {
-                        response = pseudo_msg_receive(connect_fd);
-                        if (!response) {
-                                ++tries;
-                                if (tries > 3) {
-                                        pseudo_debug(PDBGF_CLIENT, "Can't get responses.\n");
-                                        return 0;
-                                }
-                        }
-                } else {
-                        return 0;
-                }
-	} while (response == 0);
-	if (response->type != PSEUDO_MSG_ACK) {
-		pseudo_debug(PDBGF_CLIENT, "got non-ack response %d\n", response->type);
-		return 0;
-	} else {
-		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "got response type %d\n", response->type);
+		if (msg->type != PSEUDO_MSG_FASTOP) {
+			response = pseudo_msg_receive(connect_fd);
+			if (!response) {
+				pseudo_debug(PDBGF_CLIENT, "expected response did not occur; retrying\n");
+			} else {
+				if (response->type != PSEUDO_MSG_ACK) {
+					pseudo_debug(PDBGF_CLIENT, "got non-ack response %d\n", response->type);
+					return 0;
+				} else {
+					pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "got response type %d\n", response->type);
+					return response;
+				}
+			}
+		} else {
+			return 0;
+		}
 	}
-	return response;
+	pseudo_debug(PDBGF_CLIENT, "server connection persistently failed, aborting.\n");
+	abort();
+	return 0;
 }
 
 int
