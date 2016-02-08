@@ -58,7 +58,8 @@ pseudo_client_t *clients;
 static int active_clients = 0, highest_client = 0, max_clients = 0;
 
 #define LOOP_DELAY 2
-int pseudo_server_timeout = 30;
+#define DEFAULT_PSEUDO_SERVER_TIMEOUT 30
+int pseudo_server_timeout = DEFAULT_PSEUDO_SERVER_TIMEOUT;
 static int die_peacefully = 0;
 static int die_forcefully = 0;
 
@@ -345,7 +346,7 @@ serve_client(int i) {
 				}
 				in->pathlen = (s - response_path) + 1;
 				/* exit quickly once clients go away, though */
-				pseudo_server_timeout = 1;
+				pseudo_server_timeout = 3;
 			} else {
 				in->type = PSEUDO_MSG_ACK;
 				in->pathlen = 0;
@@ -481,12 +482,13 @@ pseudo_server_loop(void) {
 				if ((fd = accept(listen_fd, (struct sockaddr *) &client, &len)) != -1) {
 					pseudo_debug(PDBGF_SERVER, "new client fd %d\n", fd);
 					open_client(fd);
+                                        /* A new client implicitly cancels any
+                                         * previous shutdown request, or a
+                                         * shutdown for lack of clients.
+                                         */
+                                        pseudo_server_timeout = DEFAULT_PSEUDO_SERVER_TIMEOUT;
+                                        die_peacefully = 0;
 				}
-                                /* A new client implicitly cancels a previous
-                                 * shutdown request.
-                                 */
-                                pseudo_server_timeout = 30;
-                                die_peacefully = 0;
 			}
 			pseudo_debug(PDBGF_SERVER, "server loop complete [%d clients left]\n", active_clients);
 		}
