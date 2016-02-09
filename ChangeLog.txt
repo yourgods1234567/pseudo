@@ -1,3 +1,6 @@
+2016-02-09:
+        * (seebs) 1.7.5 release
+
 2016-02-08:
         * (seebs) require -S to shutdown server when running a command.
         * (seebs) improve logic for server shutdowns, increase short timeout
