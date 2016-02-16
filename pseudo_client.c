@@ -1215,6 +1215,8 @@ pseudo_client_setup(void) {
 }
 
 #define PSEUDO_RETRIES 50
+static char *fail_reasons[PSEUDO_RETRIES];
+
 static pseudo_msg_t *
 pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 	pseudo_msg_t *response = 0;
@@ -1246,6 +1248,9 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 				int ms = (getpid() % 5) + 3 + tries;
 				struct timespec delay = { .tv_sec = 0, .tv_nsec = ms * 1000000 };
 				nanosleep(&delay, NULL);
+				fail_reasons[tries] = "client setup failed";
+			} else {
+				fail_reasons[tries] = "client thinks it started server";
 			}
 			continue;
 		}
@@ -1257,6 +1262,7 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 			response = pseudo_msg_receive(connect_fd);
 			if (!response) {
 				pseudo_debug(PDBGF_CLIENT, "expected response did not occur; retrying\n");
+				fail_reasons[tries] = "no response from server";
 			} else {
 				if (response->type != PSEUDO_MSG_ACK) {
 					pseudo_debug(PDBGF_CLIENT, "got non-ack response %d\n", response->type);
@@ -1271,6 +1277,9 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 		}
 	}
 	pseudo_diag("pseudo: server connection persistently failed, aborting.\n");
+	for (tries = 0; tries < PSEUDO_RETRIES; ++tries) {
+		pseudo_diag("  try %2d: %s\n", tries, fail_reasons[tries] ? fail_reasons[tries] : "not recorded");
+	}
 	abort();
 	return 0;
 }
