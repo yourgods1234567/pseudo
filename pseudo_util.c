@@ -1313,7 +1313,7 @@ pseudo_etc_file(const char *file, char *realname, int flags, const char **search
 
 /* set up a log file */
 int
-pseudo_logfile(char *defname) {
+pseudo_logfile(char *defname, int prefer_fd) {
 	char *pseudo_path;
 	char *filename = pseudo_get_value("PSEUDO_DEBUG_FILE");
 	char *s;
@@ -1401,15 +1401,16 @@ pseudo_logfile(char *defname) {
 	if (fd == -1) {
 		pseudo_diag("help: can't open log file %s: %s\n", pseudo_path, strerror(errno));
 	} else {
-		/* try to force fd to 2.  We do this because glibc's malloc
+		/* try to force fd to prefer_fd.  We do this because glibc's malloc
 		 * debug unconditionally writes to fd 2, and we don't want
 		 * a client process ending op on fd 2, or server debugging
-		 * becomes a nightmare.
+		 * becomes a nightmare. So, server sets prefer_fd to 2. Client
+		 * leaves it at -1.
 		 */
-		if (fd != 2) {
+		if (prefer_fd >= 0 && fd != prefer_fd) {
 			int newfd;
-			close(2);
-			newfd = dup2(fd, 2);
+			close(prefer_fd);
+			newfd = dup2(fd, prefer_fd);
 			if (newfd != -1) {
 				fd = newfd;
 			}

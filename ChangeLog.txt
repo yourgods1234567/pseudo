@@ -1,6 +1,11 @@
+2016-02-16:
+	* (seebs) attempt at diagnostics for client failures
+	* (seebs) don't try to force pseudo's debug fd to fd 2 in clients.
+	  Also, don't allow server to end up with a client on fd 2, whether
+	  or not fd 2 is already in use.
+
 2016-02-09:
         * (seebs) 1.7.5 release
-	* (seebs) attempt at diagnostics for client failures
 
 2016-02-08:
         * (seebs) require -S to shutdown server when running a command.
