@@ -165,7 +165,7 @@ pseudo_server_start(int daemonize) {
 		pseudo_new_pid();
 		fclose(stdin);
 		fclose(stdout);
-		pseudo_logfile(PSEUDO_LOGFILE);
+		pseudo_logfile(PSEUDO_LOGFILE, 2);
 	} else {
 		/* Write the pid if we don't daemonize */
 		pseudo_server_write_pid(getpid());
@@ -480,6 +480,14 @@ pseudo_server_loop(void) {
 			     FD_ISSET(clients[0].fd, &reads))) {
 				len = sizeof(client);
 				if ((fd = accept(listen_fd, (struct sockaddr *) &client, &len)) != -1) {
+					/* Don't allow clients to end up on fd 2, because glibc's
+					 * malloc debug uses that fd unconditionally.
+					 */
+					if (fd == 2) {
+						int newfd = fcntl(fd, F_DUPFD, 3);
+						close(fd);
+						fd = newfd;
+					}
 					pseudo_debug(PDBGF_SERVER, "new client fd %d\n", fd);
 					open_client(fd);
                                         /* A new client implicitly cancels any
