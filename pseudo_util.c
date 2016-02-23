@@ -29,6 +29,7 @@
 #include <sys/stat.h>
 #include <regex.h>
 #include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
 #include <limits.h>
 
@@ -69,8 +70,25 @@ static struct pseudo_variables pseudo_env[] = {
 #ifdef PSEUDO_PROFILING
 	{ "PSEUDO_PROFILE_PATH", 19, NULL },
 #endif
+	{ "PSEUDO_EVLOG", 12, NULL },
+	{ "PSEUDO_EVLOG_FILE", 17, NULL },
 	{ NULL, 0, NULL } /* Magic terminator */
 };
+
+typedef struct {
+	struct timeval stamp;
+	int len;
+	char *data;
+} pseudo_evlog_entry;
+
+#define PSEUDO_EVLOG_ENTRIES 50
+#define PSEUDO_EVLOG_LENGTH 256
+static pseudo_evlog_entry event_log[PSEUDO_EVLOG_ENTRIES];
+static char *pseudo_evlog_buffer;
+static int pseudo_evlog_next_entry = 0;
+static void pseudo_evlog_set(char *);
+static void pseudo_evlog_flags_finalize(void);
+static unsigned long pseudo_debug_flags_in(char *);
 
 /* -1 - init hasn't been run yet
  * 0 - init has been run
@@ -115,7 +133,7 @@ pseudo_has_unload(char * const *envp) {
 	if (pseudo_util_initted == -1)
 		pseudo_init_util();
 	while (pseudo_env[i].key && strcmp(pseudo_env[i].key, unload))
-	       ++i;
+		++i;
 	if (pseudo_env[i].key && pseudo_env[i].value)
 		return 1;
 
@@ -205,9 +223,9 @@ pseudo_init_util(void) {
 
 	/* Somewhere we have to set the debug level.. */
 	env = pseudo_get_value("PSEUDO_DEBUG");
-        if (env) {
+	if (env) {
 		int i;
-                int level = atoi(env);
+		int level = atoi(env);
 		if (level > 0) {
 			for (i = 0; i < level; ++i) {
 				pseudo_debug_verbose();
@@ -216,12 +234,20 @@ pseudo_init_util(void) {
 			pseudo_debug_set(env);
 		}
 		pseudo_debug_flags_finalize();
-        }
-        free(env);
+	}
+	free(env);
+	env = pseudo_get_value("PSEUDO_EVLOG");
+	if (env) {
+		pseudo_evlog_set(env);
+		pseudo_evlog_flags_finalize();
+	}
+	free(env);
 }
 
 unsigned long pseudo_util_debug_flags = 0;
+unsigned long pseudo_util_evlog_flags = 0;
 int pseudo_util_debug_fd = 2;
+int pseudo_util_evlog_fd = 2;
 static int debugged_newline = 1;
 static char pid_text[32];
 static size_t pid_len;
@@ -389,30 +415,52 @@ pseudo_debug_verbose(void) {
 	}
 }
 
+void
+pseudo_debug_set(char *s) {
+	pseudo_util_debug_flags = pseudo_debug_flags_in(s);
+}
+
+static void
+pseudo_evlog_set(char *s) {
+	pseudo_util_evlog_flags = pseudo_debug_flags_in(s);
+}
+
 /* This exists because we don't want to allocate a bunch of strings
  * and free them immediately if you have several flags set.
  */
-void
-pseudo_debug_flags_finalize(void) {
+static void
+pseudo_flags_finalize(unsigned long flags, char *value) {
 	char buf[PDBG_MAX + 1] = "", *s = buf;
 	for (int i = 0; i < PDBG_MAX; ++i) {
-		if (pseudo_util_debug_flags & (1 << i)) {
+		if (flags & (1 << i)) {
 			*s++ = pseudo_debug_type_symbolic(i);
 		}
 	}
-	pseudo_set_value("PSEUDO_DEBUG", buf);
+	pseudo_set_value(value, buf);
 }
 
 void
-pseudo_debug_set(char *s) {
+pseudo_debug_flags_finalize(void) {
+	pseudo_flags_finalize(pseudo_util_debug_flags, "PSEUDO_DEBUG");
+}
+
+void
+pseudo_evlog_flags_finalize(void) {
+	pseudo_flags_finalize(pseudo_util_evlog_flags, "PSEUDO_EVLOG");
+}
+
+static unsigned long
+pseudo_debug_flags_in(char *s) {
+	unsigned long flags = 0;
 	if (!s)
-		return;
+		return flags;
 	for (; *s; ++s) {
 		int id = pseudo_debug_type_symbolic_id(*s);
 		if (id > 0) {
-			pseudo_util_debug_flags |= (1 << id);
+			flags |= (1 << id);
 		}
 	}
+	return flags;
 }
 
 void
@@ -452,6 +500,89 @@ pseudo_diag(char *fmt, ...) {
 
 	wrote += write(pseudo_util_debug_fd, debuff, len);
 	return wrote;
+}
+
+void
+pseudo_evlog_dump(void) {
+	char scratch[256], firstdate[64], lastdate[64];
+	time_t first = 0, last = 0;
+	int len;
+	int entries = 0;
+	struct tm first_tm, last_tm;
+	int wrote; /* ignoring write errors because there's nothing we can do */
+
+	for (int i = 0; i < PSEUDO_EVLOG_ENTRIES; ++i) {
+		pseudo_evlog_entry *e = &event_log[i];
+		if (!e->data || e->len < 0 || e->stamp.tv_sec == 0)
+			continue;
+		++entries;
+		if (!first || e->stamp.tv_sec < first)
+			first = e->stamp.tv_sec;
+		if (!last || e->stamp.tv_sec > last)
+			last = e->stamp.tv_sec;
+	}
+	localtime_r(&first, &first_tm);
+	localtime_r(&last, &last_tm);
+	strftime(firstdate, 64, "%Y-%M-%D %H:%M:%S", &first_tm);
+	strftime(lastdate, 64, "%Y-%M-%D %H:%M:%S", &last_tm);
+
+	len = snprintf(scratch, 256, "event log for pid %d [%d entries]\n",
+		getpid(), entries);
+	if (len > 256)
+		len = 256;
+	wrote = write(pseudo_util_evlog_fd, scratch, len);
+	len = snprintf(scratch, 256, "  first entry %s\n", firstdate);
+	wrote = write(pseudo_util_evlog_fd, scratch, len);
+	len = snprintf(scratch, 256, "  last entry %s\n", lastdate);
+	wrote = write(pseudo_util_evlog_fd, scratch, len);
+
+	for (int i = 0; i < PSEUDO_EVLOG_ENTRIES; ++i) {
+		int entry = (pseudo_evlog_next_entry + i) % PSEUDO_EVLOG_ENTRIES;
+		pseudo_evlog_entry *ev = &event_log[entry];
+		if (!ev->data || ev->len <= 0)
+			continue;
+		localtime_r(&ev->stamp.tv_sec, &first_tm);
+		len = strftime(firstdate, 64, "%M:%S", &first_tm);
+		if (len) {
+			len = snprintf(scratch, 256, "%s.%03d: ", firstdate,
+				(int) (ev->stamp.tv_usec / 1000));
+			wrote = write(pseudo_util_evlog_fd, scratch, len);
+		} else {
+			wrote = write(pseudo_util_evlog_fd, "no timestamp: ", 14);
+		}
+		wrote = write(pseudo_util_evlog_fd, ev->data, ev->len);
+	}
+	(void) wrote;
+}
+
+int
+pseudo_evlog_internal(char *fmt, ...) {
+	va_list ap;
+	pseudo_evlog_entry *ev = &event_log[pseudo_evlog_next_entry++];
+
+	pseudo_evlog_next_entry %= PSEUDO_EVLOG_ENTRIES;
+
+	if (!ev->data) {
+		pseudo_evlog_buffer = malloc(PSEUDO_EVLOG_ENTRIES * PSEUDO_EVLOG_LENGTH);
+		if (pseudo_evlog_buffer) {
+			for (int i = 0; i < PSEUDO_EVLOG_ENTRIES; ++i) {
+				event_log[i].data = pseudo_evlog_buffer + (PSEUDO_EVLOG_LENGTH * i);
+			}
+		} else {
+			pseudo_diag("fatal: can't allocate event log storage.\n");
+		}
+	}
+
+	va_start(ap, fmt);
+	ev->len = vsnprintf(ev->data, PSEUDO_EVLOG_LENGTH, fmt, ap);
+	va_end(ap);
+	if (ev->len > PSEUDO_EVLOG_LENGTH) {
+		strcpy(ev->data + PSEUDO_EVLOG_LENGTH - 5, "...\n");
+		ev->len = PSEUDO_EVLOG_LENGTH - 1;
+	}
+	gettimeofday(&ev->stamp, NULL);
+
+	return ev->len;
 }
 
 /* store pid in text form for prepending to messages */
@@ -749,14 +880,14 @@ pseudo_setupenv() {
 	free(pseudo_get_libdir());
 	free(pseudo_get_localstatedir());
 
-        while (pseudo_env[i].key) {
+	while (pseudo_env[i].key) {
 		if (pseudo_env[i].value) {
 			setenv(pseudo_env[i].key, pseudo_env[i].value, 0);
 			pseudo_debug(PDBGF_ENV | PDBGF_VERBOSE, "pseudo_env: %s => %s\n",
 				pseudo_env[i].key, pseudo_env[i].value);
 		}
-                i++;
-        }
+		i++;
+	}
 
 	const char *ld_library_path = getenv(PRELINK_PATH);
 	char *libdir_path = pseudo_libdir_path(NULL);
@@ -846,9 +977,9 @@ pseudo_setupenvp(char * const *envp) {
 		++env_count;
 	}
 
-        for (i = 0; pseudo_env[i].key; i++) {
+	for (i = 0; pseudo_env[i].key; i++) {
 		size_pseudoenv++;
-        }
+	}
 
 	env_count += size_pseudoenv; /* We're going to over allocate */
 
@@ -1312,10 +1443,9 @@ pseudo_etc_file(const char *file, char *realname, int flags, const char **search
 }
 
 /* set up a log file */
-int
-pseudo_logfile(char *defname, int prefer_fd) {
+static int
+pseudo_logfile(char *filename, char *defname, int prefer_fd) {
 	char *pseudo_path;
-	char *filename = pseudo_get_value("PSEUDO_DEBUG_FILE");
 	char *s;
 #if PSEUDO_PORT_LINUX
 	extern char *program_invocation_short_name; /* glibcism */
@@ -1422,6 +1552,32 @@ pseudo_logfile(char *defname, int prefer_fd) {
 		return -1;
 	else
 		return 0;
+}
+
+int
+pseudo_debug_logfile(char *defname, int prefer_fd) {
+	char *filename = pseudo_get_value("PSEUDO_DEBUG_FILE");
+	int fd;
+
+	fd = pseudo_logfile(filename, defname, prefer_fd);
+	if (fd > -1) {
+		pseudo_util_debug_fd = fd;
+		return 0;
+	}
+	return 1;
+}
+
+int
+pseudo_evlog_logfile(char *defname, int prefer_fd) {
+	char *filename = pseudo_get_value("PSEUDO_EVLOG_FILE");
+	int fd;
+
+	fd = pseudo_logfile(filename, defname, prefer_fd);
+	if (fd > -1) {
+		pseudo_util_evlog_fd = fd;
+		return 0;
+	}
+	return 1;
 }
 
 void

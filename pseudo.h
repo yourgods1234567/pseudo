@@ -38,10 +38,16 @@ extern void pseudo_debug_set(char *);
 extern void pseudo_debug_clear(char *);
 extern void pseudo_debug_flags_finalize(void);
 extern unsigned long pseudo_util_debug_flags;
+extern unsigned long pseudo_util_evlog_flags;
 extern int pseudo_util_debug_fd;
 extern int pseudo_disabled;
 extern int pseudo_allow_fsync;
 extern int pseudo_diag(char *, ...) __attribute__ ((format (printf, 1, 2)));
+extern int pseudo_evlog_internal(char *, ...) __attribute__ ((format (printf, 1, 2)));
+#define pseudo_evlog(x, ...) do { \
+	if (pseudo_util_evlog_flags & (x)) { pseudo_evlog_internal(__VA_ARGS__); } \
+} while (0) 
+extern void pseudo_evlog_dump(void);
 #ifndef NDEBUG
 #define pseudo_debug(x, ...) do { \
 	if ((x) & PDBGF_VERBOSE) { \
@@ -82,7 +88,7 @@ extern char *pseudo_get_prefix(char *);
 extern char *pseudo_get_bindir(void);
 extern char *pseudo_get_libdir(void);
 extern char *pseudo_get_localstatedir(void);
-extern int pseudo_logfile(char *defname, int prefer_fd);
+extern int pseudo_debug_logfile(char *defname, int prefer_fd);
 extern ssize_t pseudo_sys_path_max(void);
 extern ssize_t pseudo_path_max(void);
 #define PSEUDO_PWD_MAX 4096

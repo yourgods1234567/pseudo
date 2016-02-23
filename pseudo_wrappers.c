@@ -182,7 +182,7 @@ pseudo_init_wrappers(void) {
 	/* Once the wrappers are setup, we can now use open... so
 	 * setup the logfile, if necessary...
 	 */
-	pseudo_logfile(NULL, -1);
+	pseudo_debug_logfile(NULL, -1);
 
 	pseudo_magic();
 	pseudo_droplock();

@@ -165,7 +165,7 @@ pseudo_server_start(int daemonize) {
 		pseudo_new_pid();
 		fclose(stdin);
 		fclose(stdout);
-		pseudo_logfile(PSEUDO_LOGFILE, 2);
+		pseudo_debug_logfile(PSEUDO_LOGFILE, 2);
 	} else {
 		/* Write the pid if we don't daemonize */
 		pseudo_server_write_pid(getpid());
@@ -511,6 +511,9 @@ pseudo_server_loop(void) {
 				(double) message_time.tv_sec +
 				(double) message_time.tv_usec / 1000000.0);
 			close(clients[0].fd);
+			/* This is a good place to insert a delay for
+			 * debugging race conditions during startup. */
+			/* sleep(1); */
 			exit(0);
 		}
 		FD_ZERO(&reads);

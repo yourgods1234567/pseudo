@@ -944,11 +944,18 @@ client_spawn_server(void) {
 			pseudo_diag("couldn't fork server: %s\n", strerror(errno));
 			return 1;
 		}
+		pseudo_evlog(PDBGF_CLIENT, "spawned new server, pid %d\n", server_pid);
 		pseudo_debug(PDBGF_CLIENT | PDBGF_SERVER, "spawned server, pid %d\n", server_pid);
 		/* wait for the child process to terminate, indicating server
 		 * is ready
 		 */
 		waitpid(server_pid, &status, 0);
+		if (WIFEXITED(status)) {
+			pseudo_evlog(PDBGF_CLIENT, "server exited status %d\n", WEXITSTATUS(status));
+		}
+		if (WIFSIGNALED(status)) {
+			pseudo_evlog(PDBGF_CLIENT, "server exited from signal %d\n", WTERMSIG(status));
+		}
 		server_pid = -2;
 		pseudo_pidfile = pseudo_localstatedir_path(PSEUDO_PIDFILE);
 		fp = fopen(pseudo_pidfile, "r");
@@ -1193,6 +1200,7 @@ pseudo_client_setup(void) {
 	}
 	if (!server_pid) {
 		if (client_spawn_server()) {
+			pseudo_evlog(PDBGF_CLIENT, "no pid, and client_spawn_server failed.\n");
 			return 1;
 		}
 	}
@@ -1202,13 +1210,16 @@ pseudo_client_setup(void) {
 	pseudo_debug(PDBGF_CLIENT, "server seems to be gone, trying to restart\n");
 	if (client_spawn_server()) {
 
+		pseudo_evlog(PDBGF_CLIENT, "attempted respawn, failed.\n");
 		pseudo_debug(PDBGF_CLIENT, "failed to spawn server, waiting for retry.\n");
 		return 1;
 	} else {
+		pseudo_evlog(PDBGF_CLIENT, "restarted, new pid %d\n", server_pid);
 		pseudo_debug(PDBGF_CLIENT, "restarted, new pid %d\n", server_pid);
 		if (!client_connect() && !client_ping()) {
 			return 0;
 		}
+		pseudo_evlog(PDBGF_CLIENT, "server spawn seemed okay, but failed on connect/ping.\n");
 	}
 	pseudo_debug(PDBGF_CLIENT, "couldn't get or spawn a server.\n");
 	return 1;
@@ -1230,6 +1241,7 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 	 * client may have done it.
 	 */
         for (tries = 0; tries < PSEUDO_RETRIES; ++tries) {
+		pseudo_evlog(PDBGF_CLIENT, "try %d, connect fd is %d\n", tries, connect_fd);
 		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sending a message: ino %llu\n",
 			(unsigned long long) msg->ino);
 		rc = pseudo_msg_send(connect_fd, msg, len, path);
@@ -1245,6 +1257,7 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 			if (pseudo_client_setup()) {
 				int ms = (getpid() % 5) + 3 + tries;
 				struct timespec delay = { .tv_sec = 0, .tv_nsec = ms * 1000000 };
+				pseudo_evlog(PDBGF_CLIENT, "setup failed, delaying %d ms.\n", ms);
 				nanosleep(&delay, NULL);
 			}
 			continue;
@@ -1271,7 +1284,10 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 		}
 	}
 	pseudo_diag("pseudo: server connection persistently failed, aborting.\n");
+	pseudo_evlog_dump();
+	pseudo_diag("event log dumped, aborting.\n");
 	abort();
+	pseudo_diag("aborted.\n");
 	return 0;
 }
 
