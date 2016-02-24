@@ -482,7 +482,7 @@ main(int argc, char *argv[]) {
 		} else {
 			pseudo_diag("pseudo: Error obtaining lock: %s\n", strerror(errno));
 		}
-		exit(0);
+		exit(1);
 	} else {
 		pseudo_debug(PDBGF_SERVER, "Acquired lock.\n");
 	}

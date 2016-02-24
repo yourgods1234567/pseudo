@@ -510,10 +510,11 @@ pseudo_server_loop(void) {
 				getpid(), messages,
 				(double) message_time.tv_sec +
 				(double) message_time.tv_usec / 1000000.0);
+			/* and at this point, we'll start refusing connections */
 			close(clients[0].fd);
 			/* This is a good place to insert a delay for
 			 * debugging race conditions during startup. */
-			/* sleep(1); */
+			/* usleep(300000); */
 			exit(0);
 		}
 		FD_ZERO(&reads);

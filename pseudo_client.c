@@ -957,21 +957,28 @@ client_spawn_server(void) {
 			pseudo_evlog(PDBGF_CLIENT, "server exited from signal %d\n", WTERMSIG(status));
 		}
 		server_pid = -2;
-		pseudo_pidfile = pseudo_localstatedir_path(PSEUDO_PIDFILE);
-		fp = fopen(pseudo_pidfile, "r");
-		if (fp) {
-			if (fscanf(fp, "%d", &server_pid) != 1) {
-				pseudo_debug(PDBGF_CLIENT, "Opened server PID file, but didn't get a pid.\n");
+		if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+			pseudo_evlog(PDBGF_CLIENT, "server reports successful startup, reading pid.\n");
+			pseudo_pidfile = pseudo_localstatedir_path(PSEUDO_PIDFILE);
+			fp = fopen(pseudo_pidfile, "r");
+			if (fp) {
+				if (fscanf(fp, "%d", &server_pid) != 1) {
+					pseudo_debug(PDBGF_CLIENT, "Opened server PID file, but didn't get a pid.\n");
+				}
+				fclose(fp);
+			} else {
+				pseudo_debug(PDBGF_CLIENT, "no pid file (%s): %s\n",
+					pseudo_pidfile, strerror(errno));
 			}
-			fclose(fp);
+			pseudo_debug(PDBGF_CLIENT, "read new pid file: %d\n", server_pid);
+			free(pseudo_pidfile);
+			/* at this point, we should have a new server_pid */
+			return 0;
 		} else {
-			pseudo_debug(PDBGF_CLIENT, "no pid file (%s): %s\n",
-				pseudo_pidfile, strerror(errno));
+			pseudo_evlog(PDBGF_CLIENT, "server startup apparently unsuccessful.  setting server pid to -1.\n");
+			server_pid = -1;
+			return 1;
 		}
-		pseudo_debug(PDBGF_CLIENT, "read new pid file: %d\n", server_pid);
-		free(pseudo_pidfile);
-		/* at this point, we should have a new server_pid */
-		return 0;
 	} else {
 		char *base_args[] = { NULL, NULL, NULL };
 		char **argv;
@@ -1129,8 +1136,11 @@ client_connect(void) {
 
 	connect_fd = socket(PF_UNIX, SOCK_STREAM, 0);
 	connect_fd = pseudo_fd(connect_fd, MOVE_FD);
+	pseudo_evlog(PDBGF_CLIENT, "creating socket %s.\n", sun.sun_path);
 	if (connect_fd == -1) {
-		pseudo_diag("Can't create socket: %s (%s)\n", sun.sun_path, strerror(errno));
+		char *e = strerror(errno);
+		pseudo_diag("Can't create socket: %s (%s)\n", sun.sun_path, e);
+		pseudo_evlog(PDBGF_CLIENT, "failed to create socket: %s\n", e);
 		return 1;
 	}
 
@@ -1152,7 +1162,9 @@ client_connect(void) {
 		return 1;
 	}
 	if (connect(connect_fd, (struct sockaddr *) &sun, sizeof(sun)) == -1) {
-		pseudo_debug(PDBGF_CLIENT, "Can't connect socket to pseudo.socket: (%s)\n", strerror(errno));
+		char *e = strerror(errno);
+		pseudo_debug(PDBGF_CLIENT, "Can't connect socket to pseudo.socket: (%s)\n", e);
+		pseudo_evlog(PDBGF_CLIENT, "connect failed: %s\n", e);
 		close(connect_fd);
 		if (fchdir(cwd_fd) == -1) {
 			pseudo_diag("return to previous directory failed: %s\n",
@@ -1167,6 +1179,7 @@ client_connect(void) {
 			strerror(errno));
 	}
 	close(cwd_fd);
+	pseudo_evlog(PDBGF_CLIENT, "socket connect OK.\n");
 	pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "connected socket.\n");
 	return 0;
 }
@@ -1225,7 +1238,7 @@ pseudo_client_setup(void) {
 	return 1;
 }
 
-#define PSEUDO_RETRIES 50
+#define PSEUDO_RETRIES 20
 static pseudo_msg_t *
 pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 	pseudo_msg_t *response = 0;
@@ -1246,6 +1259,7 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 			(unsigned long long) msg->ino);
 		rc = pseudo_msg_send(connect_fd, msg, len, path);
 		if (rc != 0) {
+			pseudo_evlog(PDBGF_CLIENT, "msg_send failed [%d].\n", rc);
 			pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "msg_send: %d%s\n",
 				rc,
 				rc == -1 ? " (sigpipe)" :
@@ -1255,10 +1269,12 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 			 * retry.
 			 */
 			if (pseudo_client_setup()) {
-				int ms = (getpid() % 5) + 3 + tries;
+				int ms = (getpid() % 5) + (3 * tries);
 				struct timespec delay = { .tv_sec = 0, .tv_nsec = ms * 1000000 };
 				pseudo_evlog(PDBGF_CLIENT, "setup failed, delaying %d ms.\n", ms);
 				nanosleep(&delay, NULL);
+			} else {
+				pseudo_evlog(PDBGF_CLIENT, "setup apparently successful, retrying message immediately.\n");
 			}
 			continue;
 		}

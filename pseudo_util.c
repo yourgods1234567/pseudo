@@ -81,7 +81,7 @@ typedef struct {
 	char *data;
 } pseudo_evlog_entry;
 
-#define PSEUDO_EVLOG_ENTRIES 50
+#define PSEUDO_EVLOG_ENTRIES 250
 #define PSEUDO_EVLOG_LENGTH 256
 static pseudo_evlog_entry event_log[PSEUDO_EVLOG_ENTRIES];
 static char *pseudo_evlog_buffer;
@@ -542,7 +542,7 @@ pseudo_evlog_dump(void) {
 		if (!ev->data || ev->len <= 0)
 			continue;
 		localtime_r(&ev->stamp.tv_sec, &first_tm);
-		len = strftime(firstdate, 64, "%M:%S", &first_tm);
+		len = strftime(firstdate, 64, "%H:%M:%S", &first_tm);
 		if (len) {
 			len = snprintf(scratch, 256, "%s.%03d: ", firstdate,
 				(int) (ev->stamp.tv_usec / 1000));

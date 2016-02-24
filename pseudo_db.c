@@ -23,6 +23,7 @@
 #include <sys/stat.h>
 #include <sys/xattr.h>
 #include <time.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <sqlite3.h>
@@ -537,17 +538,36 @@ make_tables(sqlite3 *db,
 /* registered with atexit */
 static void
 cleanup_db(void) {
-	pseudo_debug(PDBGF_SERVER, "server exiting\n");
+	char datebuf[64];
+	struct tm stamp_tm;
+	struct timeval stamp;
+
+	gettimeofday(&stamp, NULL);
+	localtime_r(&stamp.tv_sec, &stamp_tm);
+	strftime(datebuf, 64, "%H:%M:%S", &stamp_tm);
+
+	pseudo_diag("db cleanup for server shutdown, %s.%03d\n",
+		datebuf, (int) (stamp.tv_usec / 1000));
 #ifdef USE_MEMORY_DB
         if (real_file_db) {
                 pdb_backup();
                 sqlite3_close(real_file_db);
 	}
+	gettimeofday(&stamp, NULL);
+	localtime_r(&stamp.tv_sec, &stamp_tm);
+	strftime(datebuf, 64, "%H:%M:%S", &stamp_tm);
+	pseudo_diag("memory-to-file backup complete, %s.%03d.\n",
+		datebuf, (int) (stamp.tv_usec / 1000));
 #endif
 	if (file_db)
 		sqlite3_close(file_db);
 	if (log_db)
 		sqlite3_close(log_db);
+	gettimeofday(&stamp, NULL);
+	localtime_r(&stamp.tv_sec, &stamp_tm);
+	strftime(datebuf, 64, "%H:%M:%S", &stamp_tm);
+	pseudo_diag("db cleanup finished, %s.%03d\n",
+		datebuf, (int) (stamp.tv_usec / 1000));
 }
 
 /* This function has been rewritten and I no longer hate it.  I just feel

@@ -1,3 +1,7 @@
+2016-02-24:
+	* (seebs) event logger cleanup, improved diagnostics for client
+	  spawning, server exit cleanup.
+
 2016-02-23:
 	* (seebs) event logger initial implementation
 
