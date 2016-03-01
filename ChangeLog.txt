@@ -1,3 +1,6 @@
+2016-03-01:
+	* (seebs) server launch reworking
+
 2016-02-24:
 	* (seebs) event logger cleanup, improved diagnostics for client
 	  spawning, server exit cleanup.

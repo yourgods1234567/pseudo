@@ -19,7 +19,7 @@
  */
 #include <stdlib.h>
 #include <ctype.h>
-#include <stdlib.h>
+#include <signal.h>
 #include <string.h>
 #include <stdio.h>
 #include <errno.h>
@@ -85,43 +85,32 @@ usage(int status) {
 	exit(status);
 }
 
-/* helper function to make a directory, just like mkdir -p.
- * Can't use system() because the child shell would end up trying
- * to do the same thing...
- */
-static void
-mkdir_p(char *path) {
-	size_t len = strlen(path);
-	size_t i;
-
-	for (i = 1; i < len; ++i) {
-		/* try to create all the directories in path, ignoring
-		 * failures
-		 */
-		if (path[i] == '/') {
-			path[i] = '\0';
-			(void) mkdir(path, 0755);
-			path[i] = '/';
-		}
-	}
-	(void) mkdir(path, 0755);
-}
 
 /* main server process */
 int
 main(int argc, char *argv[]) {
 	int o;
 	char *s;
-	int lockfd, newfd;
 	char *ld_env = getenv(PRELINK_LIBRARIES);
 	int rc = 0;
 	char opts[pseudo_path_max()], *optptr = opts;
-	char *lockname;
-	char *lockpath;
+	sigset_t blocked, saved;
 
 	opts[0] = '\0';
 
 	pseudo_init_util();
+
+	/* The pseudo client will have blocked these, and sigprocmask
+	 * is inherited, but we want them to work.
+	 */
+	sigemptyset(&blocked);
+	sigaddset(&blocked, SIGALRM);	/* every-N-seconds tasks */
+	sigaddset(&blocked, SIGCHLD);	/* reaping child processes */
+	sigaddset(&blocked, SIGHUP);	/* idiomatically, reloading config */
+	sigaddset(&blocked, SIGTERM);	/* shutdown/teardown operations */
+	sigaddset(&blocked, SIGUSR1);	/* reopening log files, sometimes */
+	sigaddset(&blocked, SIGUSR2);	/* who knows what people do */
+	sigprocmask(SIG_UNBLOCK, &blocked, &saved);
 
 	if (ld_env && strstr(ld_env, "libpseudo")) {
 		pseudo_debug(PDBGF_SERVER, "can't run daemon with libpseudo in %s\n", PRELINK_LIBRARIES);
@@ -439,54 +428,6 @@ main(int argc, char *argv[]) {
 			exit(EXIT_FAILURE);
 		}
 	}
-	/* if we got here, we are not running a command, and we are not in
-	 * a pseudo environment.
-	 */
-	pseudo_new_pid();
-
-	pseudo_debug(PDBGF_SERVER, "opening lock.\n");
-	lockpath = pseudo_localstatedir_path(NULL);
-	if (!lockpath) {
-		pseudo_diag("Couldn't allocate a file path.\n");
-		exit(EXIT_FAILURE);
-	}
-	mkdir_p(lockpath);
-	lockname = pseudo_localstatedir_path(PSEUDO_LOCKFILE);
-	if (!lockname) {
-		pseudo_diag("Couldn't allocate a file path.\n");
-		exit(EXIT_FAILURE);
-	}
-	lockfd = open(lockname, O_RDWR | O_CREAT, 0644);
-	if (lockfd < 0) {
-		pseudo_diag("Can't open or create lockfile %s: %s\n",
-			lockname, strerror(errno));
-		exit(EXIT_FAILURE);
-	}
-	free(lockname);
-
-	if (lockfd <= 2) {
-		newfd = fcntl(lockfd, F_DUPFD, 3);
-		if (newfd < 0) {
-			pseudo_diag("Can't move lockfile to safe descriptor: %s\n",
-				strerror(errno));
-		} else {
-			close(lockfd);
-			lockfd = newfd;
-		}
-	}
-
-	pseudo_debug(PDBGF_SERVER, "acquiring lock.\n");
-	if (flock(lockfd, LOCK_EX | LOCK_NB) < 0) {
-		if (errno == EACCES || errno == EAGAIN) {
-			pseudo_debug(PDBGF_SERVER, "Existing server has lock.  Exiting.\n");
-		} else {
-			pseudo_diag("pseudo: Error obtaining lock: %s\n", strerror(errno));
-		}
-		exit(1);
-	} else {
-		pseudo_debug(PDBGF_SERVER, "Acquired lock.\n");
-	}
-	pseudo_debug(PDBGF_SERVER, "serving (%s)\n", opt_d ? "daemon" : "foreground");
 	return pseudo_server_start(opt_d);
 }
 

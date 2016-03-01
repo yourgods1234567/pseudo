@@ -1,0 +1,16 @@
+exit_status: PSEUDO_EXIT; char * message = "exit status unknown"
+# 0 indicates success. The others indicate where in the startup process
+# something went wrong, for any point at which we'd exit.
+general, "unspecified error"
+fork_failed, "fork failed"
+lock_path, "path allocation failure for lock file"
+lock_held, "lock already held by another process"
+lock_failed, "could not create/lock lockfile"
+timeout, "child process timed out"
+waitpid, "waitpid() for child process failed unexpectedly"
+socket_create, "couldn't create socket"
+socket_fd, "couldn't move socket to safe file descriptor"
+socket_path, "path allocation failure for server socket"
+socket_unlink, "couldn't unlink existing server socket"
+socket_bind, "couldn't bind server socket"
+socket_listen, "couldn't listen on server socket"

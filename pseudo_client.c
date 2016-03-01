@@ -938,8 +938,15 @@ client_spawn_server(void) {
 	int status;
 	FILE *fp;
 	char * pseudo_pidfile;
+	char *old_value = pseudo_get_value("PSEUDO_UNLOAD");
+	/* drop pseudo immediately so the fork/exec are lower-load. */
+	pseudo_set_value("PSEUDO_UNLOAD", "YES");
 
 	if ((server_pid = fork()) != 0) {
+		/* restore PSEUDO_UNLOAD in caller */
+		pseudo_set_value("PSEUDO_UNLOAD", old_value);
+		free(old_value);
+
 		if (server_pid == -1) {
 			pseudo_diag("couldn't fork server: %s\n", strerror(errno));
 			return 1;
@@ -1767,7 +1774,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		break;
 	case OP_DUP:
 		/* just copy the path over */
-		pseudo_debug(PDBGF_CLIENT, "dup: fd_path(%d) = %p [%s], dup to %d\n",
+		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "dup: fd_path(%d) = %p [%s], dup to %d\n",
 			fd, fd_path(fd), fd_path(fd) ? fd_path(fd) : "<nil>",
 			dirfd);
 		pseudo_client_path(dirfd, fd_path(fd));

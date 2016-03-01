@@ -82,6 +82,29 @@ static struct timeval message_time = { .tv_sec = 0 };
 
 static void pseudo_server_loop(void);
 
+/* helper function to make a directory, just like mkdir -p.
+ * Can't use system() because the child shell would end up trying
+ * to do the same thing...
+ */
+static void
+mkdir_p(char *path) {
+	size_t len = strlen(path);
+	size_t i;
+
+	for (i = 1; i < len; ++i) {
+		/* try to create all the directories in path, ignoring
+		 * failures
+		 */
+		if (path[i] == '/') {
+			path[i] = '\0';
+			(void) mkdir(path, 0755);
+			path[i] = '/';
+		}
+	}
+	(void) mkdir(path, 0755);
+}
+
+
 static int
 pseudo_server_write_pid(pid_t pid) {
 	char *pseudo_path;
@@ -104,11 +127,175 @@ pseudo_server_write_pid(pid_t pid) {
 	return 0;
 }
 
+static sig_atomic_t got_sigusr1 = 0;
+static sig_atomic_t got_sigalrm = 0;
+
+static void
+handle_sigusr1(int sig) {
+	(void) sig;
+	pseudo_diag("sigusr1\n");
+	got_sigusr1 = 1;
+}
+
+static void
+handle_sigalrm(int sig) {
+	(void) sig;
+	pseudo_diag("sigalrm\n");
+	got_sigalrm = 1;
+}
+
+#define PSEUDO_CHILD_PROCESS_TIMEOUT 2
 int
 pseudo_server_start(int daemonize) {
 	struct sockaddr_un sun = { .sun_family = AF_UNIX, .sun_path = PSEUDO_SOCKET };
 	char *pseudo_path;
-	int rc, newfd;
+	int newfd, lockfd;
+	int rc, save_errno;
+	char *lockname;
+	char *lockpath;
+	struct flock lock_data;
+
+	/* parent process will wait for child process, or until it gets
+	 * SIGUSR1, or until too much time has passed. */
+	pseudo_diag("server start: daemonize %d.\n", daemonize);
+	if (daemonize) {
+		int child;
+		child = fork();
+		if (child == -1) {
+			pseudo_diag("Couldn't fork child process: %s\n",
+				strerror(errno));
+			exit(PSEUDO_EXIT_FORK_FAILED);
+		}
+		if (child) {
+			int status;
+			int rc;
+			int save_errno;
+			pseudo_diag("parent process, pid %d, doing setup.\n", getpid());
+
+			got_sigusr1 = 0;
+			signal(SIGUSR1, handle_sigusr1);
+			signal(SIGALRM, handle_sigalrm);
+			alarm(PSEUDO_CHILD_PROCESS_TIMEOUT);
+			int tries = 0;
+			do {
+				rc = waitpid(child, &status, WNOHANG);
+				save_errno = errno;
+				if (rc != child && !got_sigalrm && !got_sigusr1) {
+					struct timespec delay = { .tv_sec = 0, .tv_nsec = 100000000 };
+					nanosleep(&delay, NULL);
+					++tries;
+				}
+
+			} while (!got_sigalrm && !got_sigusr1 && rc != child);
+			alarm(0);
+			pseudo_diag("pid waited: %d/%d [%d tries], status %d\n", rc, save_errno, tries, status);
+			pseudo_diag("usr1: %d alrm: %d\n", got_sigusr1, got_sigalrm);
+			if (got_sigusr1) {
+				pseudo_debug(PDBGF_SERVER, "server says it's ready.\n");
+				exit(0);
+			}
+			if (save_errno == EINTR) {
+				pseudo_diag("Child process timeout after %d seconds.\n",
+					PSEUDO_CHILD_PROCESS_TIMEOUT);
+				exit(PSEUDO_EXIT_TIMEOUT);
+			}
+			if (rc == -1) {
+				pseudo_diag("Failure in waitpid(): %s\n",
+					strerror(save_errno));
+				exit(PSEUDO_EXIT_WAITPID);
+			}
+			if (WIFSIGNALED(status)) {
+				status = WTERMSIG(status);
+				pseudo_diag("Child process exited from signal %d.\n",
+					status);
+				kill(getpid(), status);
+				/* can't use +128 because that's not valid */
+				exit(status + 64);
+			}
+			if (WIFEXITED(status)) {
+				status = WEXITSTATUS(status);
+				pseudo_diag("Child process exit status %d: %s\n",
+					status,
+					pseudo_exit_status_name(status));
+				exit(status);
+			}
+			pseudo_diag("Unknown exit status %d.\n", status);
+			exit(1);
+		} else {
+			/* detach from parent session */
+			setsid();
+			fclose(stdin);
+			fclose(stdout);
+			pseudo_debug_logfile(PSEUDO_LOGFILE, 2);
+			/* and then just execute the server code normally.  */
+			/* Any logging will presumably go to logfile, but
+			 * exit status will make it back to the parent for
+			 * reporting. */
+		}
+	}
+
+	pseudo_diag("pid %d [parent %d], doing new pid setup and server start\n", getpid(), getppid());
+	pseudo_new_pid();
+
+	pseudo_debug(PDBGF_SERVER, "opening lock.\n");
+	lockpath = pseudo_localstatedir_path(NULL);
+	if (!lockpath) {
+		pseudo_diag("Couldn't allocate a file path.\n");
+		exit(PSEUDO_EXIT_LOCK_PATH);
+	}
+	mkdir_p(lockpath);
+	lockname = pseudo_localstatedir_path(PSEUDO_LOCKFILE);
+	if (!lockname) {
+		pseudo_diag("Couldn't allocate a file path.\n");
+		exit(PSEUDO_EXIT_LOCK_PATH);
+	}
+	lockfd = open(lockname, O_RDWR | O_CREAT, 0644);
+	if (lockfd < 0) {
+		pseudo_diag("Can't open or create lockfile %s: %s\n",
+			lockname, strerror(errno));
+		exit(PSEUDO_EXIT_LOCK_FAILED);
+	}
+	free(lockname);
+
+	/* the lock shuffle has to happen before an fcntl lock, which
+	 * is automatically dropped if *any* file descriptor on the file
+	 * is closed...
+	 */
+	if (lockfd <= 2) {
+		newfd = fcntl(lockfd, F_DUPFD, 3);
+		if (newfd < 0) {
+			pseudo_diag("Can't move lockfile to safe descriptor, leaving it on %d: %s\n",
+				lockfd, strerror(errno));
+		} else {
+			close(lockfd);
+			lockfd = newfd;
+		}
+	}
+
+	pseudo_debug(PDBGF_SERVER, "acquiring lock.\n");
+
+	memset(&lock_data, 0, sizeof(lock_data));
+	lock_data.l_type = F_WRLCK;
+	lock_data.l_whence = SEEK_SET;
+	lock_data.l_start = 0;
+	lock_data.l_len = 0;
+
+	rc = fcntl(lockfd, F_SETLK, &lock_data);
+	if (rc < 0) {
+		save_errno = errno;
+		if (save_errno == EACCES || save_errno == EAGAIN) {
+			rc = fcntl(lockfd, F_GETLK, &lock_data);
+			if (rc == 0 && lock_data.l_type != F_UNLCK) {
+				pseudo_diag("lock already held by existing pid %d.\n",
+					lock_data.l_pid);
+			}
+		}
+		pseudo_diag("Couldn't obtain lock: %s.\n", strerror(save_errno));
+		exit(PSEUDO_EXIT_LOCK_HELD);
+
+	} else {
+		pseudo_debug(PDBGF_SERVER, "Acquired lock.\n");
+	}
 
 #if PSEUDO_PORT_DARWIN
 	sun.sun_len = strlen(PSEUDO_SOCKET) + 1;
@@ -117,7 +304,7 @@ pseudo_server_start(int daemonize) {
 	listen_fd = socket(PF_UNIX, SOCK_STREAM, 0);
 	if (listen_fd < 0) {
 		pseudo_diag("couldn't create listening socket: %s\n", strerror(errno));
-		return 1;
+		exit(PSEUDO_EXIT_SOCKET_CREATE);
 	}
 
 	if (listen_fd <= 2) {
@@ -125,7 +312,7 @@ pseudo_server_start(int daemonize) {
 		if (newfd < 0) {
 			pseudo_diag("couldn't dup listening socket: %s\n", strerror(errno));
 			close(listen_fd);
-			return 1;
+			exit(PSEUDO_EXIT_SOCKET_FD);
 		} else {
 			close(listen_fd);
 			listen_fd = newfd;
@@ -137,46 +324,39 @@ pseudo_server_start(int daemonize) {
 	if (!pseudo_path || chdir(pseudo_path) == -1) {
 		pseudo_diag("can't get to '%s': %s\n",
 			pseudo_path, strerror(errno));
-		return 1;
+		exit(PSEUDO_EXIT_SOCKET_PATH);
 	}
 	free(pseudo_path);
 	/* remove existing socket -- if it exists */
-	unlink(sun.sun_path);
+	rc = unlink(sun.sun_path);
+	if (rc == -1 && errno != ENOENT) {
+		pseudo_diag("Can't unlink existing socket: %s.\n",
+			strerror(errno));
+		exit(PSEUDO_EXIT_SOCKET_UNLINK);
+	}
 	if (bind(listen_fd, (struct sockaddr *) &sun, sizeof(sun)) == -1) {
 		pseudo_diag("couldn't bind listening socket: %s\n", strerror(errno));
-		return 1;
+		exit(PSEUDO_EXIT_SOCKET_BIND);
 	}
 	if (listen(listen_fd, 5) == -1) {
 		pseudo_diag("couldn't listen on socket: %s\n", strerror(errno));
-		return 1;
+		exit(PSEUDO_EXIT_SOCKET_LISTEN);
 	}
-	if (daemonize) {
-		if ((rc = fork()) != 0) {
-			if (rc == -1) {
-				pseudo_diag("couldn't spawn server: %s\n", strerror(errno));
-				return 0;
-			}
-			pseudo_debug(PDBGF_SERVER, "started server, pid %d\n", rc);
-			close(listen_fd);
-			/* Parent writes pid, that way it's always correct */
-			return pseudo_server_write_pid(rc);
-		}
-		/* In child */
-		pseudo_new_pid();
-		fclose(stdin);
-		fclose(stdout);
-		pseudo_debug_logfile(PSEUDO_LOGFILE, 2);
-	} else {
-		/* Write the pid if we don't daemonize */
-		pseudo_server_write_pid(getpid());
+	rc = pseudo_server_write_pid(getpid());
+	if (rc != 0) {
+		pseudo_diag("warning: couldn't write pid file.\n");
 	}
-
-	setsid();
 	signal(SIGHUP, quit_now);
 	signal(SIGINT, quit_now);
 	signal(SIGALRM, quit_now);
 	signal(SIGQUIT, quit_now);
 	signal(SIGTERM, quit_now);
+	/* tell parent process to stop waiting */
+	if (daemonize) {
+		pseudo_diag("Setup complete, sending SIGUSR1 to pid %d.\n",
+			getppid());
+		kill(getppid(), SIGUSR1);
+	}
 	pseudo_server_loop();
 	return 0;
 }
