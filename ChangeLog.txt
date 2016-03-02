@@ -1,6 +1,7 @@
 2016-03-02:
 	* (seebs) more server launch rework and updates
 	* (seebs) make dup/dup2 less verbose in client
+	* (seebs) cleanup client spawning code a bit
 
 2016-03-01:
 	* (seebs) server launch reworking

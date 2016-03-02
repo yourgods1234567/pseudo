@@ -1204,47 +1204,80 @@ pseudo_client_setup(void) {
 		close(connect_fd);
 		connect_fd = -1;
 	}
+	if (client_connect() == 0) {
+		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "connection started.\n");
+		if (client_ping() == 0) {
+			pseudo_debug(PDBGF_CLIENT, "connection ping okay, server ready.\n");
+			return 0;
+		} else {
+			pseudo_debug(PDBGF_CLIENT, "connection up, but ping failed.\n");
+			/* and now we'll close the connection, and try to
+			 * kick the server.
+			 */
+			close(connect_fd);
+			connect_fd = -1;
+		}
+	}
+	pseudo_debug(PDBGF_CLIENT, "connection failed, checking server...\n");
 
+	/* This whole section is purely informational; we want to know
+	 * what might be up with the server, but we're going to try to
+	 * start one anyway.
+	 */
 	pseudo_pidfile = pseudo_localstatedir_path(PSEUDO_PIDFILE);
 	fp = fopen(pseudo_pidfile, "r");
+	free(pseudo_pidfile);
 	if (fp) {
 		if (fscanf(fp, "%d", &server_pid) != 1) {
 			pseudo_debug(PDBGF_CLIENT, "Opened server PID file, but didn't get a pid.\n");
 		}
 		fclose(fp);
 	}
-	if (server_pid) {
+	if (server_pid > 0) {
 		if (kill(server_pid, 0) == -1) {
 			pseudo_debug(PDBGF_CLIENT, "couldn't find server at pid %d: %s\n",
 				server_pid, strerror(errno));
 			server_pid = 0;
+		} else {
+			pseudo_debug(PDBGF_CLIENT, "server pid should be %d, which exists, but connection failed.\n",
+				server_pid);
+			/* and we'll restart the server anyway. */
 		}
+	} else {
+		pseudo_debug(PDBGF_CLIENT, "no server pid available.\n");
 	}
-	if (!server_pid) {
-		if (client_spawn_server()) {
-			pseudo_evlog(PDBGF_CLIENT, "no pid, and client_spawn_server failed.\n");
-			return 1;
-		}
-	}
-	if (!client_connect() && !client_ping()) {
-		return 0;
-	}
-	pseudo_debug(PDBGF_CLIENT, "server seems to be gone, trying to restart\n");
 	if (client_spawn_server()) {
 
 		pseudo_evlog(PDBGF_CLIENT, "attempted respawn, failed.\n");
 		pseudo_debug(PDBGF_CLIENT, "failed to spawn server, waiting for retry.\n");
 		return 1;
 	} else {
-		pseudo_evlog(PDBGF_CLIENT, "restarted, new pid %d\n", server_pid);
-		pseudo_debug(PDBGF_CLIENT, "restarted, new pid %d\n", server_pid);
-		if (!client_connect() && !client_ping()) {
-			return 0;
+		pseudo_evlog(PDBGF_CLIENT, "restarted, new pid %d, will retry message\n", server_pid);
+		pseudo_debug(PDBGF_CLIENT, "restarted, new pid %d, will retry message\n", server_pid);
+		/* so we think a server has started. Now we'll retry the
+		 * connect/ping, because if they work we'll have set
+		 * connect_fd correctly, and will have succeeded.
+		 */
+		if (!client_connect()) {
+			pseudo_debug(PDBGF_CLIENT, "connect okay to restarted server.\n");
+			pseudo_evlog(PDBGF_CLIENT, "connect okay to restarted server.\n");
+			if (!client_ping()) {
+				pseudo_debug(PDBGF_CLIENT, "ping okay to restarted server.\n");
+				pseudo_evlog(PDBGF_CLIENT, "ping okay to restarted server.\n");
+				return 0;
+			} else {
+				pseudo_debug(PDBGF_CLIENT, "ping failed to restarted server.\n");
+				pseudo_evlog(PDBGF_CLIENT, "ping failed to restarted server.\n");
+				close(connect_fd);
+				connect_fd = -1;
+				return 1;
+			}
+		} else {
+			pseudo_debug(PDBGF_CLIENT, "connect failed to restarted server.\n");
+			pseudo_evlog(PDBGF_CLIENT, "connect failed to restarted server.\n");
+			return 1;
 		}
-		pseudo_evlog(PDBGF_CLIENT, "server spawn seemed okay, but failed on connect/ping.\n");
 	}
-	pseudo_debug(PDBGF_CLIENT, "couldn't get or spawn a server.\n");
-	return 1;
 }
 
 #define PSEUDO_RETRIES 20
@@ -1267,10 +1300,10 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 	 * It's okay if we can't start a server sometimes, because another
 	 * client may have done it.
 	 */
+	pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sending a message: ino %llu\n",
+		(unsigned long long) msg->ino);
         for (tries = 0; tries < PSEUDO_RETRIES; ++tries) {
 		pseudo_evlog(PDBGF_CLIENT, "try %d, connect fd is %d\n", tries, connect_fd);
-		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sending a message: ino %llu\n",
-			(unsigned long long) msg->ino);
 		rc = pseudo_msg_send(connect_fd, msg, len, path);
 		if (rc != 0) {
 			pseudo_evlog(PDBGF_CLIENT, "msg_send failed [%d].\n", rc);
