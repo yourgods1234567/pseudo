@@ -938,15 +938,8 @@ client_spawn_server(void) {
 	int status;
 	FILE *fp;
 	char * pseudo_pidfile;
-	char *old_value = pseudo_get_value("PSEUDO_UNLOAD");
-	/* drop pseudo immediately so the fork/exec are lower-load. */
-	pseudo_set_value("PSEUDO_UNLOAD", "YES");
 
 	if ((server_pid = fork()) != 0) {
-		/* restore PSEUDO_UNLOAD in caller */
-		pseudo_set_value("PSEUDO_UNLOAD", old_value);
-		free(old_value);
-
 		if (server_pid == -1) {
 			pseudo_diag("couldn't fork server: %s\n", strerror(errno));
 			return 1;
@@ -1039,14 +1032,23 @@ client_spawn_server(void) {
 				close(fd);
 		}
 		/* and now, execute the server */
-
-		pseudo_set_value("PSEUDO_UNLOAD", "YES");
-		pseudo_setupenv();
-		pseudo_dropenv(); /* drop PRELINK_LIBRARIES */
-
 		pseudo_debug(PDBGF_CLIENT | PDBGF_SERVER | PDBGF_INVOKE, "calling execv on %s\n", argv[0]);
 
-		execv(argv[0], argv);
+		/* don't try to log this exec, because it'll cause the process
+		 * that is supposed to be spawning the server to try to spawn
+		 * a server. Whoops. This is because the exec wrapper doesn't
+		 * respect antimagic, which I believe is intentional.
+		 */
+		pseudo_client_logging = 0;
+
+		/* execve will call setupenv, then call dropenv if
+		 * PSEUDO_UNLOAD is set. We call execve, not execv, due
+		 * to unsetenv changing the responses given by getenv,
+		 * but not changing the contents of the variable environ,
+		 * in some cases.
+		 */
+		pseudo_set_value("PSEUDO_UNLOAD", "1");
+		execve(argv[0], argv, environ);
 		pseudo_diag("critical failure: exec of pseudo daemon failed: %s\n", strerror(errno));
 		exit(1);
 	}
@@ -1251,6 +1253,11 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 	pseudo_msg_t *response = 0;
 	int tries = 0;
 	int rc;
+	extern char *program_invocation_short_name;
+	#if 0
+	if (!strcmp(program_invocation_short_name, "pseudo"))
+		abort();
+	#endif
 
 	if (!msg)
 		return 0;

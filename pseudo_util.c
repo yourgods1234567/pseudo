@@ -588,9 +588,14 @@ pseudo_evlog_internal(char *fmt, ...) {
 /* store pid in text form for prepending to messages */
 void
 pseudo_new_pid() {
+#if PSEUDO_PORT_LINUX
+	extern char *program_invocation_short_name; /* glibcism */
+#else
+	char *program_invocation_short_name = "unknown";
+#endif
 	int pid = getpid();
 	pid_len = snprintf(pid_text, 32, "%d: ", pid);
-	pseudo_debug(PDBGF_PID, "new pid: %d\n", pid);
+	pseudo_debug(PDBGF_PID, "new pid: %d [%s]\n", pid, program_invocation_short_name);
 }
 
 /* helper function for pseudo_fix_path
@@ -823,7 +828,6 @@ void pseudo_dropenv() {
 			pseudo_diag("fatal: can't allocate new %s variable.\n", PRELINK_LIBRARIES);
 		}
 		if (ld_preload && strlen(ld_preload)) {
-			pseudo_diag("ld_preload without: <%s>\n", ld_preload);
 			setenv(PRELINK_LIBRARIES, ld_preload, 1);
 		} else {
 			unsetenv(PRELINK_LIBRARIES);

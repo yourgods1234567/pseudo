@@ -133,14 +133,12 @@ static sig_atomic_t got_sigalrm = 0;
 static void
 handle_sigusr1(int sig) {
 	(void) sig;
-	pseudo_diag("sigusr1\n");
 	got_sigusr1 = 1;
 }
 
 static void
 handle_sigalrm(int sig) {
 	(void) sig;
-	pseudo_diag("sigalrm\n");
 	got_sigalrm = 1;
 }
 
@@ -157,7 +155,6 @@ pseudo_server_start(int daemonize) {
 
 	/* parent process will wait for child process, or until it gets
 	 * SIGUSR1, or until too much time has passed. */
-	pseudo_diag("server start: daemonize %d.\n", daemonize);
 	if (daemonize) {
 		int child;
 		child = fork();
@@ -170,7 +167,6 @@ pseudo_server_start(int daemonize) {
 			int status;
 			int rc;
 			int save_errno;
-			pseudo_diag("parent process, pid %d, doing setup.\n", getpid());
 
 			got_sigusr1 = 0;
 			signal(SIGUSR1, handle_sigusr1);
@@ -181,20 +177,21 @@ pseudo_server_start(int daemonize) {
 				rc = waitpid(child, &status, WNOHANG);
 				save_errno = errno;
 				if (rc != child && !got_sigalrm && !got_sigusr1) {
-					struct timespec delay = { .tv_sec = 0, .tv_nsec = 100000000 };
+					struct timespec delay = { .tv_sec = 0, .tv_nsec = 100000 };
 					nanosleep(&delay, NULL);
 					++tries;
 				}
 
 			} while (!got_sigalrm && !got_sigusr1 && rc != child);
 			alarm(0);
-			pseudo_diag("pid waited: %d/%d [%d tries], status %d\n", rc, save_errno, tries, status);
-			pseudo_diag("usr1: %d alrm: %d\n", got_sigusr1, got_sigalrm);
+			pseudo_debug(PDBGF_SERVER, "pid waited: %d/%d [%d tries], status %d, usr1 %d, alrm %d\n",
+				rc, save_errno, tries, status,
+				got_sigusr1, got_sigalrm);
 			if (got_sigusr1) {
 				pseudo_debug(PDBGF_SERVER, "server says it's ready.\n");
 				exit(0);
 			}
-			if (save_errno == EINTR) {
+			if (got_sigalrm) {
 				pseudo_diag("Child process timeout after %d seconds.\n",
 					PSEUDO_CHILD_PROCESS_TIMEOUT);
 				exit(PSEUDO_EXIT_TIMEOUT);
@@ -217,10 +214,13 @@ pseudo_server_start(int daemonize) {
 				pseudo_diag("Child process exit status %d: %s\n",
 					status,
 					pseudo_exit_status_name(status));
+				if (status == 0) {
+					pseudo_diag("Hang on, server should not have exited 0 without sending us sigusr1?\n");
+				}
 				exit(status);
 			}
 			pseudo_diag("Unknown exit status %d.\n", status);
-			exit(1);
+			exit(PSEUDO_EXIT_GENERAL);
 		} else {
 			/* detach from parent session */
 			setsid();
@@ -589,7 +589,7 @@ pseudo_server_loop(void) {
 	pseudo_debug(PDBGF_SERVER, "server loop started.\n");
 	if (listen_fd < 0) {
 		pseudo_diag("got into loop with no valid listen fd.\n");
-		exit(1);
+		exit(PSEUDO_EXIT_LISTEN_FD);
 	}
 	pdb_log_msg(SEVERITY_INFO, NULL, NULL, NULL, "server started (pid %d)", getpid());
 

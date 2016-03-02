@@ -113,12 +113,12 @@ main(int argc, char *argv[]) {
 	sigprocmask(SIG_UNBLOCK, &blocked, &saved);
 
 	if (ld_env && strstr(ld_env, "libpseudo")) {
-		pseudo_debug(PDBGF_SERVER, "can't run daemon with libpseudo in %s\n", PRELINK_LIBRARIES);
+		pseudo_debug(PDBGF_SERVER, "[server %d] can't run daemon with libpseudo in %s\n", getpid(), PRELINK_LIBRARIES);
 		s = pseudo_get_value("PSEUDO_UNLOAD");
 		if (s) {
 			pseudo_diag("pseudo: I can't seem to make %s go away.  Sorry.\n", PRELINK_LIBRARIES);
 			pseudo_diag("pseudo: %s: %s\n", PRELINK_LIBRARIES, ld_env);
-			exit(EXIT_FAILURE);
+			exit(PSEUDO_EXIT_PSEUDO_LOADED);
 		}
 		free(s);
 		pseudo_set_value("PSEUDO_UNLOAD", "YES");
@@ -126,7 +126,7 @@ main(int argc, char *argv[]) {
 		pseudo_dropenv(); /* Drop PRELINK_LIBRARIES */
 
 		execv(argv[0], argv);
-		exit(EXIT_FAILURE);
+		exit(PSEUDO_EXIT_PSEUDO_LOADED);
 	}
 
 	/* Be sure to clean PSEUDO_UNLOAD so if we're asked to run any
@@ -258,7 +258,7 @@ main(int argc, char *argv[]) {
 
 	if (!pseudo_get_prefix(argv[0])) {
 		pseudo_diag("Can't figure out prefix.  Set PSEUDO_PREFIX or invoke with full path.\n");
-		exit(EXIT_FAILURE);
+		exit(PSEUDO_EXIT_PSEUDO_PREFIX);
 	}
 
 	/* move database */
@@ -339,13 +339,13 @@ main(int argc, char *argv[]) {
 
 	if (opt_d && opt_f) {
 		pseudo_diag("You cannot run a foregrounded daemon.\n");
-		exit(EXIT_FAILURE);
+		exit(PSEUDO_EXIT_PSEUDO_INVOCATION);
 	}
 
 	if (opt_f || opt_d) {
 		if (argc > optind) {
 			pseudo_diag("pseudo: running program implies spawning background daemon.\n");
-			exit(EXIT_FAILURE);
+			exit(PSEUDO_EXIT_PSEUDO_INVOCATION);
 		}
 	} else {
 		char fullpath[pseudo_path_max()];
