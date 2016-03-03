@@ -1,3 +1,6 @@
+2016-03-09:
+	* (seebs) workaround for bash redefining getenv/unsetenv/etc.
+
 2016-03-02:
 	* (seebs) more server launch rework and updates
 	* (seebs) make dup/dup2 less verbose in client

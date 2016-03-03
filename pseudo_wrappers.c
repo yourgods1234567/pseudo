@@ -86,16 +86,15 @@ extern struct timeval *pseudo_wrapper_time;
 #define PROFILE_DONE do {} while(0)
 #endif
 
+/* later, the init code can change these to refer to the real calls and
+ * skip the wrappers.
+ */
 #ifdef PSEUDO_XATTRDB
 extern ssize_t (*pseudo_real_lgetxattr)(const char *, const char *, void *, size_t);
 extern ssize_t (*pseudo_real_fgetxattr)(int, const char *, void *, size_t);
 extern int (*pseudo_real_lsetxattr)(const char *, const char *, const void *, size_t, int);
 extern int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int);
 #endif
-/* later, the init code can change these to refer to the real calls and
- * skip the wrappers.
- */
-extern int (*pseudo_real_lstat)(const char *path, PSEUDO_STATBUF *buf);
 
 static void
 _libpseudo_init(void) {
@@ -178,6 +177,17 @@ pseudo_init_wrappers(void) {
 	pseudo_real_fsetxattr = real_fsetxattr;
 #endif
 	pseudo_real_lstat = base_lstat;
+	/* bash has its own local copies of these which it uses
+	 * instead of ours...
+	 */
+	pseudo_real_unsetenv = dlsym(RTLD_NEXT, "unsetenv");
+	pseudo_real_getenv = dlsym(RTLD_NEXT, "getenv");
+	pseudo_real_setenv = dlsym(RTLD_NEXT, "setenv");
+	/* and these are used so the client's server spawn can bypass
+	 * wrappers.
+	 */
+	pseudo_real_fork = dlsym(RTLD_NEXT, "fork");
+	pseudo_real_execv = dlsym(RTLD_NEXT, "execv");
 
 	/* Once the wrappers are setup, we can now use open... so
 	 * setup the logfile, if necessary...

@@ -58,6 +58,14 @@ extern int pseudo_pwd_lck_close(void);
 extern FILE *pseudo_pwd;
 extern FILE *pseudo_grp;
 
+/* pseudo_wrappers will try to initialize these */
+extern int (*pseudo_real_lstat)(const char *path, PSEUDO_STATBUF *buf);
+extern int (*pseudo_real_unsetenv)(const char *);
+extern char * (*pseudo_real_getenv)(const char *);
+extern int (*pseudo_real_setenv)(const char *, const char *, int);
+extern int (*pseudo_real_fork)(void);
+extern int (*pseudo_real_execv)(const char *, char * const *);
+
 /* support related to chroot/getcwd/etc. */
 extern int pseudo_client_getcwd(void);
 extern int pseudo_client_chroot(const char *);

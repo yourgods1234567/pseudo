@@ -81,6 +81,16 @@ typedef struct {
 	char *data;
 } pseudo_evlog_entry;
 
+/* so bash overrides getenv/unsetenv/etcetera, preventing them from
+ * actually modifying environ, so we have pseudo_wrappers try to dlsym
+ * the right values. This could fail, in which case we'd get null
+ * pointers, and we'll just call whatever the linker gives us and
+ * hope for the best.
+ */
+#define SETENV(x, y, z) (pseudo_real_setenv ? pseudo_real_setenv : setenv)(x, y, z)
+#define GETENV(x) (pseudo_real_getenv ? pseudo_real_getenv : getenv)(x)
+#define UNSETENV(x) (pseudo_real_unsetenv ? pseudo_real_unsetenv : unsetenv)(x)
+
 #define PSEUDO_EVLOG_ENTRIES 250
 #define PSEUDO_EVLOG_LENGTH 256
 static pseudo_evlog_entry event_log[PSEUDO_EVLOG_ENTRIES];
@@ -102,6 +112,10 @@ static int pseudo_util_initted = -1;  /* Not yet run */
 
 /* bypass wrapper logic on path computations */
 int (*pseudo_real_lstat)(const char *path, PSEUDO_STATBUF *buf) = NULL;
+/* bash workaround */
+int (*pseudo_real_unsetenv)(const char *) = unsetenv;
+char * (*pseudo_real_getenv)(const char *) = getenv;
+int (*pseudo_real_setenv)(const char *, const char *, int) = setenv;
 
 #if 0
 static void
@@ -126,7 +140,7 @@ pseudo_has_unload(char * const *envp) {
 	size_t i = 0;
 
 	/* Is it in the caller environment? */
-	if (NULL != getenv(unload))
+	if (NULL != GETENV(unload))
 		return 1;
 
 	/* Is it in the environment cache? */
@@ -161,7 +175,7 @@ pseudo_get_value(const char *key) {
 	/* Check if the environment has it and we don't ...
 	 * if so, something went wrong... so we'll attempt to recover
 	 */
-	if (pseudo_env[i].key && !pseudo_env[i].value && getenv(pseudo_env[i].key))
+	if (pseudo_env[i].key && !pseudo_env[i].value && GETENV(pseudo_env[i].key))
 		pseudo_init_util();
 
 	if (pseudo_env[i].value)
@@ -215,8 +229,8 @@ pseudo_init_util(void) {
 	pseudo_util_initted = 1;
 
 	for (i = 0; pseudo_env[i].key; i++) {
-		if (getenv(pseudo_env[i].key))
-			pseudo_set_value(pseudo_env[i].key, getenv(pseudo_env[i].key));
+		if (GETENV(pseudo_env[i].key))
+			pseudo_set_value(pseudo_env[i].key, GETENV(pseudo_env[i].key));
 	}
 
 	pseudo_util_initted = 0;
@@ -820,7 +834,7 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
  * we don't try to fix the library path.
  */
 void pseudo_dropenv() {
-	char *ld_preload = getenv(PRELINK_LIBRARIES);
+	char *ld_preload = GETENV(PRELINK_LIBRARIES);
 
 	if (ld_preload) {
 		ld_preload = without_libpseudo(ld_preload);
@@ -828,9 +842,9 @@ void pseudo_dropenv() {
 			pseudo_diag("fatal: can't allocate new %s variable.\n", PRELINK_LIBRARIES);
 		}
 		if (ld_preload && strlen(ld_preload)) {
-			setenv(PRELINK_LIBRARIES, ld_preload, 1);
+			SETENV(PRELINK_LIBRARIES, ld_preload, 1);
 		} else {
-			unsetenv(PRELINK_LIBRARIES);
+			UNSETENV(PRELINK_LIBRARIES);
 		}
 	}
 }
@@ -886,14 +900,14 @@ pseudo_setupenv() {
 
 	while (pseudo_env[i].key) {
 		if (pseudo_env[i].value) {
-			setenv(pseudo_env[i].key, pseudo_env[i].value, 0);
+			SETENV(pseudo_env[i].key, pseudo_env[i].value, 0);
 			pseudo_debug(PDBGF_ENV | PDBGF_VERBOSE, "pseudo_env: %s => %s\n",
 				pseudo_env[i].key, pseudo_env[i].value);
 		}
 		i++;
 	}
 
-	const char *ld_library_path = getenv(PRELINK_PATH);
+	const char *ld_library_path = GETENV(PRELINK_PATH);
 	char *libdir_path = pseudo_libdir_path(NULL);
 	if (!ld_library_path) {
 		size_t len = strlen(libdir_path) + 1 + (strlen(libdir_path) + 2) + 1;
@@ -902,7 +916,7 @@ pseudo_setupenv() {
 			pseudo_diag("fatal: can't allocate new %s variable.\n", PRELINK_PATH);
 		}
 		snprintf(newenv, len, "%s:%s64", libdir_path, libdir_path);
-		setenv(PRELINK_PATH, newenv, 1);
+		SETENV(PRELINK_PATH, newenv, 1);
 	} else if (!strstr(ld_library_path, libdir_path)) {
 		size_t len = strlen(ld_library_path) + 1 + strlen(libdir_path) + 1 + (strlen(libdir_path) + 2) + 1;
 		char *newenv = malloc(len);
@@ -910,26 +924,26 @@ pseudo_setupenv() {
 			pseudo_diag("fatal: can't allocate new %s variable.\n", PRELINK_PATH);
 		}
 		snprintf(newenv, len, "%s:%s:%s64", ld_library_path, libdir_path, libdir_path);
-		setenv(PRELINK_PATH, newenv, 1);
+		SETENV(PRELINK_PATH, newenv, 1);
 	} else {
 		/* nothing to do, ld_library_path exists and contains
 		 * our preferred path */
 	}
 
-	char *ld_preload = getenv(PRELINK_LIBRARIES);
+	char *ld_preload = GETENV(PRELINK_LIBRARIES);
 	if (ld_preload) {
 		ld_preload = with_libpseudo(ld_preload, libdir_path);
 		if (!ld_preload) {
 			pseudo_diag("fatal: can't allocate new %s variable.\n", PRELINK_LIBRARIES);
 		}
-		setenv(PRELINK_LIBRARIES, ld_preload, 1);
+		SETENV(PRELINK_LIBRARIES, ld_preload, 1);
 		free(ld_preload);
 	} else {
 		ld_preload = with_libpseudo("", libdir_path);
 		if (!ld_preload) {
 			pseudo_diag("fatal: can't allocate new %s variable.\n", PRELINK_LIBRARIES);
 		}
-		setenv(PRELINK_LIBRARIES, ld_preload, 1);
+		SETENV(PRELINK_LIBRARIES, ld_preload, 1);
 		free(ld_preload);
 	}
 
@@ -940,9 +954,9 @@ pseudo_setupenv() {
 
 
 #if PSEUDO_PORT_DARWIN
-	char *force_flat = getenv("DYLD_FORCE_FLAT_NAMESPACE");
+	char *force_flat = GETENV("DYLD_FORCE_FLAT_NAMESPACE");
 	if (!force_flat) {
-		setenv("DYLD_FORCE_FLAT_NAMESPACE", "1", 1);
+		SETENV("DYLD_FORCE_FLAT_NAMESPACE", "1", 1);
 	}
 #endif
 }

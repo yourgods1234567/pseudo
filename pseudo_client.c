@@ -105,6 +105,9 @@ gid_t pseudo_egid;
 gid_t pseudo_sgid;
 gid_t pseudo_fgid;
 
+int (*pseudo_real_fork)(void) = fork;
+int (*pseudo_real_execv)(const char *, char * const *) = execv;
+
 #define PSEUDO_ETC_FILE(filename, realname, flags) pseudo_etc_file(filename, realname, flags, passwd_paths, npasswd_paths)
 
 /* helper function to make a directory, just like mkdir -p.
@@ -939,7 +942,7 @@ client_spawn_server(void) {
 	FILE *fp;
 	char * pseudo_pidfile;
 
-	if ((server_pid = fork()) != 0) {
+	if ((server_pid = pseudo_real_fork()) != 0) {
 		if (server_pid == -1) {
 			pseudo_diag("couldn't fork server: %s\n", strerror(errno));
 			return 1;
@@ -1041,14 +1044,13 @@ client_spawn_server(void) {
 		 */
 		pseudo_client_logging = 0;
 
-		/* execve will call setupenv, then call dropenv if
-		 * PSEUDO_UNLOAD is set. We call execve, not execv, due
-		 * to unsetenv changing the responses given by getenv,
-		 * but not changing the contents of the variable environ,
-		 * in some cases.
+		/* manual setup of environment, so we can call real-execv
+		 * instead of the wrapper.
 		 */
-		pseudo_set_value("PSEUDO_UNLOAD", "1");
-		execve(argv[0], argv, environ);
+		pseudo_set_value("PSEUDO_UNLOAD", "YES");
+		pseudo_setupenv();
+		pseudo_dropenv();
+		pseudo_real_execv(argv[0], argv);
 		pseudo_diag("critical failure: exec of pseudo daemon failed: %s\n", strerror(errno));
 		exit(1);
 	}
