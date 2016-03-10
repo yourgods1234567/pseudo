@@ -1,3 +1,6 @@
+2016-03-10:
+	* (seebs) make bind work (so userspace NFS server can handle pseudo)
+
 2016-03-09:
 	* (seebs) workaround for bash redefining getenv/unsetenv/etc.
 
