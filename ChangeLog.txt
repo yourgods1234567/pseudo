@@ -1,3 +1,6 @@
+2016-03-11:
+	* (seebs) set sane umask in server, just in case.
+
 2016-03-10:
 	* (seebs) make bind work (so userspace NFS server can handle pseudo)
 

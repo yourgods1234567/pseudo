@@ -153,6 +153,11 @@ pseudo_server_start(int daemonize) {
 	char *lockpath;
 	struct flock lock_data;
 
+	/* we want a sane umask for server operations; this is what
+	 * would control the modes of database files, sockets, and so
+	 * on.
+	 */
+	umask(022);
 	/* parent process will wait for child process, or until it gets
 	 * SIGUSR1, or until too much time has passed. */
 	if (daemonize) {
