@@ -66,6 +66,18 @@ static sqlite3 *log_db = 0;
  */
 typedef struct { char *fmt; int arg; } id_row;
 
+/* So the migrations were getting to be large and complicated. Phase
+ * one of getting rid of that is to merge their effects in and set up
+ * a dummy migration to indicate that this was done.
+ */
+static id_row files_default_migrations[] = {
+	{ "%d, -1, 'N/A (initial setup)'", 8 },
+	{ NULL },
+};
+static id_row logs_default_migrations[] = {
+	{ "%d, -1, 'N/A (initial setup)'", 7 },
+	{ NULL },
+};
 /* This seemed like a really good idea at the time.  The idea is that these
  * structures let me write semi-abstract code to "create a database" without
  * duplicating as much of the code.
@@ -73,7 +85,7 @@ typedef struct { char *fmt; int arg; } id_row;
 static struct sql_table {
 	char *name;
 	char *sql;
-	char **names;
+	char *names;
 	id_row *values;
 } file_tables[] = {
 	{ "files",
@@ -84,16 +96,25 @@ static struct sql_table {
 	    "uid INTEGER, "
 	    "gid INTEGER, "
 	    "mode INTEGER, "
-	    "rdev INTEGER",
+	    "rdev INTEGER, "
+	    "deleting INTEGER",
 	  NULL,
 	  NULL },
 	{ "xattrs",
 	  "id INTEGER PRIMARY KEY, "
-	    "file_id INTEGER REFERENCES files(id) ON DELETE CASCADE, "
+	    "dev INTEGER, "
+	    "ino INTEGER, "
 	    "name VARCHAR, "
 	    "value VARCHAR",
 	  NULL,
 	  NULL },
+	{ "migrations",
+		"id INTEGER PRIMARY KEY, "
+		"version INTEGER, "
+		"stamp INTEGER, "
+		"sql VARCHAR",
+	  "version, stamp, sql",
+	  files_default_migrations },
 	{ NULL, NULL, NULL, NULL },
 }, log_tables[] = {
 	{ "logs",
@@ -108,9 +129,23 @@ static struct sql_table {
 	    "path VARCHAR, "
 	    "result INTEGER, "
 	    "severity INTEGER, "
-	    "text VARCHAR ",
+	    "text VARCHAR, "
+	    "tag VARCHAR, "
+	    "uid INTEGER, "
+	    "gid INTEGER, "
+	    "access INTEGER, "
+	    "program VARCHAR, "
+	    "type INTEGER, "
+	    ,
 	  NULL,
 	  NULL },
+	{ "migrations",
+		"id INTEGER PRIMARY KEY, "
+		"version INTEGER, "
+		"stamp INTEGER, "
+		"sql VARCHAR",
+	  "version, stamp, sql",
+	  logs_default_migrations },
 	{ NULL, NULL, NULL, NULL },
 };
 
@@ -120,12 +155,14 @@ static struct sql_index {
 	char *table;
 	char *keys;
 } file_indexes[] = {
-/*	{ "files__path", "files", "path" }, */
 	{ "files__path_dev_ino", "files", "path, dev, ino" },
 	{ "files__dev_ino", "files", "dev, ino" },
-	{ "xattrs__file", "xattrs", "file_id" },
+	{ "migration__version", "migrations", "version" },
+	{ "xattrs_dev_ino", "xattrs", "dev, ino" },
+	{ "xattrs_dev_ino_name", "xattrs", "dev, ino, name" },
 	{ NULL, NULL, NULL },
 }, log_indexes[] = {
+	{ "migration__version", "migrations", "version" },
 	{ NULL, NULL, NULL },
 };
 
@@ -441,8 +478,9 @@ make_tables(sqlite3 *db,
 				snprintf(buffer, sizeof(buffer), sql_tables[i].values[j].fmt, sql_tables[i].values[j].arg);
 				sql = sqlite3_mprintf("INSERT INTO %s ( %s ) VALUES ( %s );",
 					sql_tables[i].name,
-					*sql_tables[i].names,
+					sql_tables[i].names,
 					buffer);
+				pseudo_debug(PDBGF_DB, "data setup: %s\n", sql);
 				rc = sqlite3_exec(db, sql, NULL, NULL, &errmsg);
 				sqlite3_free(sql);
 				if (rc) {
@@ -468,41 +506,33 @@ make_tables(sqlite3 *db,
 			}
 		}
 	}
-	/* now, see about migrations */
-	found = 0;
-	for (j = 1; j <= rows; ++j) {
-		if (!strcmp(existing[j], "migrations")) {
-			found = 1;
-			break;
-		}
+
+	/* the migrations table is assumed to exist, because we now
+	 * create it automatically; in a previous implementation, it was
+	 * only created by the first migration.
+	 */
+	sql = "SELECT MAX(version) FROM migrations;";
+	rc = sqlite3_prepare_v2(db, sql, strlen(sql), &stmt, NULL);
+	if (rc) {
+		dberr(db, "couldn't examine migrations table");
+		return 1;
 	}
-	if (found) {
-		sql = "SELECT MAX(version) FROM migrations;";
-		rc = sqlite3_prepare_v2(db, sql, strlen(sql), &stmt, NULL);
-		if (rc) {
-			dberr(db, "couldn't examine migrations table");
-			return 1;
-		}
+	rc = sqlite3_step(stmt);
+	if (rc == SQLITE_ROW) {
+		version = (unsigned long) sqlite3_column_int64(stmt, 0);
 		rc = sqlite3_step(stmt);
-		if (rc == SQLITE_ROW) {
-			version = (unsigned long) sqlite3_column_int64(stmt, 0);
-			rc = sqlite3_step(stmt);
-		} else {
-			version = -1;
-		}
-		if (rc != SQLITE_DONE) {
-			dberr(db, "not done after the single row we expected?", rc);
-			return 1;
-		}
-		pseudo_debug(PDBGF_DB, "existing database version: %d\n", version);
-		rc = sqlite3_finalize(stmt);
-		if (rc) {
-			dberr(db, "couldn't finalize version check");
-			return 1;
-		}
 	} else {
-		pseudo_debug(PDBGF_DB, "no existing database version\n");
 		version = -1;
+	}
+	if (rc != SQLITE_DONE) {
+		dberr(db, "not done after the single row we expected?", rc);
+		return 1;
+	}
+	pseudo_debug(PDBGF_DB, "existing database version: %d\n", version);
+	rc = sqlite3_finalize(stmt);
+	if (rc) {
+		dberr(db, "couldn't finalize version check");
+		return 1;
 	}
 	for (m = sql_migrations; m->sql; ++m)
 		;
@@ -514,8 +544,8 @@ make_tables(sqlite3 *db,
 	/* I hope this can never happen. */
 	pseudo_debug(PDBGF_DB, "version %d, available_migrations %d\n",
 		version, available_migrations);
-	if (version >= available_migrations)
-		version = available_migrations - 1;
+	if (version > available_migrations)
+		version = available_migrations;
 	for (m = sql_migrations + (version + 1); m->sql; ++m) {
 		int migration = (m - sql_migrations);
 		pseudo_debug(PDBGF_DB, "considering migration %d\n", migration);
@@ -1430,6 +1460,153 @@ log_entry_free(log_entry *e) {
 
 /* Now for the actual file handling code! */
 
+/* nuke any unlinked xattrs. Only used from the rare case where we try
+ * to nuke a whole bunch of "deleting" files.
+ */
+
+static void
+pdb_clear_unused_xattrs(void) {
+	static sqlite3_stmt *delete;
+	char *delete_sql = "DELETE FROM xattrs WHERE (SELECT COUNT(*) FROM files WHERE dev = xattrs.dev AND ino = xattrs.ino) = 0;";
+	int rc;
+
+	if (!file_db && get_dbs()) {
+		pseudo_diag("%s: database error.\n", __func__);
+		return;
+	}
+	if (!delete) {
+		rc = sqlite3_prepare_v2(file_db, delete_sql, strlen(delete_sql), &delete, NULL);
+		if (rc) {
+			dberr(file_db, "couldn't prepare DELETE statement for unused xattrs");
+			return;
+		}
+	}
+	rc = sqlite3_step(delete);
+	if (rc != SQLITE_DONE) {
+		dberr(file_db, "delete of unused xattrs may have failed");
+	}
+	sqlite3_reset(delete);
+	sqlite3_clear_bindings(delete);
+}
+
+/* we want to delete extended attributes for a device/inode if there
+ * are no longer any links with it. Anything that deletes at least one
+ * link for a given device/inode should then call this.
+ */
+static void
+pdb_clear_xattrs(pseudo_msg_t *msg) {
+	static sqlite3_stmt *delete;
+	char *delete_sql = "DELETE FROM xattrs WHERE dev = ? AND ino = ?;";
+	int rc;
+
+	if (!msg)
+		return;
+	if (!file_db && get_dbs()) {
+		pseudo_diag("%s: database error.\n", __func__);
+		return;
+	}
+	if (!delete) {
+		rc = sqlite3_prepare_v2(file_db, delete_sql, strlen(delete_sql), &delete, NULL);
+		if (rc) {
+			dberr(file_db, "couldn't prepare DELETE statement for unused xattrs");
+			return;
+		}
+	}
+	sqlite3_bind_int(delete, 1, msg->dev);
+	sqlite3_bind_int(delete, 2, msg->ino);
+	rc = sqlite3_step(delete);
+	if (rc != SQLITE_DONE) {
+		dberr(file_db, "delete of unused xattrs may have failed");
+	}
+	sqlite3_reset(delete);
+	sqlite3_clear_bindings(delete);
+}
+
+static void
+pdb_copy_xattrs(pseudo_msg_t *oldmsg, pseudo_msg_t *msg) {
+	static sqlite3_stmt *copy;
+	char *copy_sql = "INSERT INTO xattrs (dev, ino, name, value) "
+	    "SELECT "
+	      "?, "
+	      "?, "
+	      "name, "
+	      "value "
+	    "FROM xattrs WHERE dev = ? AND ino = ?;";
+	int rc;
+
+	if (!oldmsg || !msg)
+		return;
+	if (!file_db && get_dbs()) {
+		pseudo_diag("%s: database error.\n", __func__);
+		return;
+	}
+	if (!copy) {
+		rc = sqlite3_prepare_v2(file_db, copy_sql, strlen(copy_sql), &copy, NULL);
+		if (rc) {
+			dberr(file_db, "couldn't prepare INSERT statement for copying xattrs");
+			return;
+		}
+	}
+	sqlite3_bind_int(copy, 1, msg->dev);
+	sqlite3_bind_int(copy, 2, msg->ino);
+	sqlite3_bind_int(copy, 3, oldmsg->dev);
+	sqlite3_bind_int(copy, 4, oldmsg->ino);
+	rc = sqlite3_step(copy);
+	if (rc != SQLITE_DONE) {
+		dberr(file_db, "copy of xattrs may have failed");
+	}
+	sqlite3_reset(copy);
+	sqlite3_clear_bindings(copy);
+}
+
+static void
+pdb_check_xattrs(pseudo_msg_t *msg) {
+	static sqlite3_stmt *scan;
+	char *scan_sql = "SELECT COUNT(*) FROM files WHERE dev = ? AND ino = ?;";
+	int rc;
+
+	if (!msg)
+		return;
+	if (!file_db && get_dbs()) {
+		pseudo_diag("%s: database error.\n", __func__);
+		return;
+	}
+	if (!scan) {
+		rc = sqlite3_prepare_v2(file_db, scan_sql, strlen(scan_sql), &scan, NULL);
+		if (rc) {
+			dberr(file_db, "couldn't prepare SELECT statement for checking for existing files");
+			return;
+		}
+	}
+	int existing;
+	sqlite3_bind_int(scan, 1, msg->dev);
+	sqlite3_bind_int(scan, 2, msg->ino);
+	rc = sqlite3_step(scan);
+	if (rc == SQLITE_ROW) {
+		existing = (int) sqlite3_column_int64(scan, 0);
+		pseudo_debug(PDBGF_DB | PDBGF_VERBOSE,
+			"scan for existing files: %d\n",
+			existing);
+		rc = sqlite3_step(scan);
+	} else {
+		pseudo_debug(PDBGF_DB, "scan for existing files: no count?\n");
+		existing = 0;
+	}
+	if (rc != SQLITE_DONE) {
+		dberr(file_db, "not done after the single row we expected?", rc);
+	}
+	rc = sqlite3_finalize(scan);
+	if (rc) {
+		dberr(file_db, "couldn't finalize existing file");
+	}
+	sqlite3_reset(scan);
+	sqlite3_clear_bindings(scan);
+
+	/* if there are any matching entries, don't delete xattrs */
+	if (existing == 0)
+		pdb_clear_xattrs(msg);
+}
+
 /* pdb_link_file:  Creates a new file from msg, using the provided path
  * or 'NAMELESS FILE'.
  */
@@ -1510,6 +1687,7 @@ pdb_unlink_file_dev(pseudo_msg_t *msg) {
 	}
 	sqlite3_reset(sql_delete);
 	sqlite3_clear_bindings(sql_delete);
+	pdb_clear_xattrs(msg);
 	return rc != SQLITE_DONE;
 }
 
@@ -1630,6 +1808,7 @@ pdb_cancel_unlink_file(pseudo_msg_t *msg) {
 	pseudo_debug(PDBGF_DB, "(exact %d) ", exact);
 	sqlite3_reset(mark_file);
 	sqlite3_clear_bindings(mark_file);
+	pdb_check_xattrs(msg);
 	return rc != SQLITE_DONE;
 }
 
@@ -1667,6 +1846,7 @@ pdb_did_unlink_files(int deleting) {
 	pseudo_debug(PDBGF_DB, "(exact %d)\n", exact);
 	sqlite3_reset(delete_exact);
 	sqlite3_clear_bindings(delete_exact);
+	pdb_clear_unused_xattrs();
 	return rc != SQLITE_DONE;
 }
 
@@ -1703,6 +1883,10 @@ pdb_did_unlink_file(char *path, int deleting) {
 	pseudo_debug(PDBGF_DB, "(exact %d)\n", exact);
 	sqlite3_reset(delete_exact);
 	sqlite3_clear_bindings(delete_exact);
+	/* we have to clean everything because we don't know for sure the
+	 * device/inode...
+	 */
+	pdb_clear_unused_xattrs();
 	return rc != SQLITE_DONE;
 }
 
@@ -1742,6 +1926,7 @@ pdb_unlink_file(pseudo_msg_t *msg) {
 	pseudo_debug(PDBGF_DB, "(exact %d) ", exact);
 	sqlite3_reset(delete_exact);
 	sqlite3_clear_bindings(delete_exact);
+	pdb_check_xattrs(msg);
 	return rc != SQLITE_DONE;
 }
 
@@ -1790,6 +1975,8 @@ pdb_unlink_contents(pseudo_msg_t *msg) {
 	pseudo_debug(PDBGF_DB, "(sub %d) ", sub);
 	sqlite3_reset(delete_sub);
 	sqlite3_clear_bindings(delete_sub);
+	/* we have no idea how many things might have been affected, so. */
+	pdb_clear_unused_xattrs();
 	return rc != SQLITE_DONE;
 }
 
@@ -1937,15 +2124,25 @@ pdb_renumber_all(dev_t from, dev_t to) {
 }
 
 /* change dev/inode for a given path -- used only by RENAME for now.
+ * So, if you rename something with xattrs, we want to keep the xattrs.
+ * But. If you renamed one of multiple hard links, we may end up wanting
+ * to keep the xattrs on both the old name and the new one. But if there's
+ * only one link, we want to drop the xattrs from the old one. Eww.
  */
 int
 pdb_update_inode(pseudo_msg_t *msg) {
 	static sqlite3_stmt *update;
 	int rc;
+	static pseudo_msg_t *oldmsg;
+	int found_existing;
+
+	if (!oldmsg) {
+		oldmsg = malloc(pseudo_path_max());
+	}
+
 	char *sql = "UPDATE files "
 		    " SET dev = ?, ino = ? "
 		    " WHERE path = ?;";
-
 	if (!file_db && get_dbs()) {
 		pseudo_diag("%s: database error.\n", __func__);
 		return 0;
@@ -1963,6 +2160,12 @@ pdb_update_inode(pseudo_msg_t *msg) {
 	if (!msg->pathlen) {
 		pseudo_diag("Can't update the inode of a file without its path.\n");
 		return 1;
+	}
+	memcpy(oldmsg, msg, sizeof(msg) + msg->pathlen);
+	found_existing = !pdb_find_file_path(oldmsg);
+	if (found_existing) {
+		/* we have an existing file entry */
+		pdb_copy_xattrs(oldmsg, msg);
 	}
 	sqlite3_bind_int(update, 1, msg->dev);
 	sqlite3_bind_int64(update, 2, msg->ino);
@@ -1982,6 +2185,10 @@ pdb_update_inode(pseudo_msg_t *msg) {
 	}
 	sqlite3_reset(update);
 	sqlite3_clear_bindings(update);
+	if (found_existing) {
+		/* possibly delete old message's xattrs */
+		pdb_check_xattrs(oldmsg);
+	}
 	pseudo_debug(PDBGF_DB, "updating path %s to dev %llu, ino %llu\n",
 		msg->path,
 		(unsigned long long) msg->dev, (unsigned long long) msg->ino);
@@ -2071,7 +2278,7 @@ pdb_find_file_exact(pseudo_msg_t *msg) {
 		rc = 0;
 		break;
 	case SQLITE_DONE:
-		pseudo_debug(PDBGF_DB, "find_exact: sqlite_done on first row\n");
+		pseudo_debug(PDBGF_DB | PDBGF_VERBOSE, "find_exact: sqlite_done on first row\n");
 		rc = 1;
 		break;
 	default:
@@ -2127,7 +2334,7 @@ pdb_find_file_path(pseudo_msg_t *msg) {
 		rc = 0;
 		break;
 	case SQLITE_DONE:
-		pseudo_debug(PDBGF_DB, "find_path: sqlite_done on first row\n");
+		pseudo_debug(PDBGF_DB | PDBGF_VERBOSE, "find_path: sqlite_done on first row\n");
 		rc = 1;
 		break;
 	default:
@@ -2177,7 +2384,7 @@ pdb_get_file_path(pseudo_msg_t *msg) {
 		}
 		break;
 	case SQLITE_DONE:
-		pseudo_debug(PDBGF_DB, "find_dev: sqlite_done on first row\n");
+		pseudo_debug(PDBGF_DB | PDBGF_VERBOSE, "find_dev: sqlite_done on first row\n");
 		response = 0;
 		break;
 	default:
@@ -2230,7 +2437,7 @@ pdb_find_file_dev(pseudo_msg_t *msg, char **path) {
 		rc = 0;
 		break;
 	case SQLITE_DONE:
-		pseudo_debug(PDBGF_DB, "find_dev: sqlite_done on first row\n");
+		pseudo_debug(PDBGF_DB | PDBGF_VERBOSE, "find_dev: sqlite_done on first row\n");
 		rc = 1;
 		break;
 	default:
@@ -2292,7 +2499,7 @@ pdb_get_xattr(pseudo_msg_t *msg, char **value, size_t *len) {
 		}
 		break;
 	case SQLITE_DONE:
-		pseudo_debug(PDBGF_DB, "find_exact: sqlite_done on first row\n");
+		pseudo_debug(PDBGF_DB | PDBGF_VERBOSE, "find_exact: sqlite_done on first row\n");
 		rc = 1;
 		break;
 	default:
