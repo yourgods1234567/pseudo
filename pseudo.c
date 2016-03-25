@@ -484,6 +484,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		case OP_GET_XATTR:
 		case OP_LIST_XATTR:
 		case OP_REPLACE_XATTR:
+		case OP_REMOVE_XATTR:
 		case OP_SET_XATTR:
 			/* In a rename there are two paths, null separated in msg->path */
 			initial_len = strlen(msg->path);
