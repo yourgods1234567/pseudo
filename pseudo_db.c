@@ -194,6 +194,47 @@ static struct sql_migration {
 	{ create_migration_table },
 	{ index_migration_table },
 	{ "ALTER TABLE files ADD deleting INTEGER;" },
+	/* oops. I made a design mistake, and the table is in the wrong
+	 * format. But sqlite doesn't support modifying constraints on an
+	 * existing table, or dropping columns. Soooooo.
+	 *
+	 * Also, you can't have a foreign key relationship to data which
+	 * aren't actually unique, but the entire problem is that dev/ino
+	 * are not unique.
+	 *
+	 * Note that the name entry is not really all that useful; it's mostly
+	 * there to help with debugging, now.
+	 */
+	{
+	  "CREATE TABLE xattrs_new ("
+	      "id INTEGER PRIMARY KEY, "
+	      "dev INTEGER, "
+	      "ino INTEGER, "
+	      "name VARCHAR, "
+	      "value VARCHAR"
+	    ");",
+	},
+	{ 
+	  "INSERT INTO xattrs_new (dev, ino, name, value) "
+	    "SELECT "
+	      "(SELECT dev FROM files WHERE id = file_id), "
+	      "(SELECT ino FROM files WHERE id = file_id), "
+	      "name, "
+	      "value "
+	    "FROM xattrs;"
+	},
+	{
+	  "DROP TABLE xattrs;"
+	},
+	{
+	  "ALTER TABLE xattrs_new RENAME TO xattrs;",
+	},
+	{
+	  "CREATE INDEX xattrs__dev_ino ON xattrs (dev, ino);",
+	},
+	{
+	  "CREATE UNIQUE INDEX xattrs__dev_ino_name ON xattrs (dev, ino, name);",
+	},
 	{ NULL },
 }, log_migrations[] = {
 	{ create_migration_table },
@@ -465,11 +506,14 @@ make_tables(sqlite3 *db,
 	}
 	for (m = sql_migrations; m->sql; ++m)
 		;
-	available_migrations = m - sql_migrations;
+	/* m points to the null, so available migrations is one lower */
+	available_migrations = m - sql_migrations - 1;
 	/* I am pretty sure this can never happen. */
 	if (version < -1)
 		version = -1;
 	/* I hope this can never happen. */
+	pseudo_debug(PDBGF_DB, "version %d, available_migrations %d\n",
+		version, available_migrations);
 	if (version >= available_migrations)
 		version = available_migrations - 1;
 	for (m = sql_migrations + (version + 1); m->sql; ++m) {
@@ -593,6 +637,7 @@ get_db(struct database_info *dbinfo) {
 	if (*(dbinfo->db))
 		return 0;
 
+	pseudo_debug(PDBGF_DB, "get_db(%s)\n", dbinfo->pathname);
 	dbfile = pseudo_localstatedir_path(dbinfo->pathname);
 #ifdef USE_MEMORY_DB
         if (!strcmp(dbinfo->pathname, ":memory:")) {
@@ -1389,7 +1434,7 @@ log_entry_free(log_entry *e) {
  * or 'NAMELESS FILE'.
  */
 int
-pdb_link_file(pseudo_msg_t *msg, long long *row) {
+pdb_link_file(pseudo_msg_t *msg) {
 	static sqlite3_stmt *insert;
 	int rc;
 	char *sql = "INSERT INTO files "
@@ -1429,10 +1474,6 @@ pdb_link_file(pseudo_msg_t *msg, long long *row) {
 	rc = sqlite3_step(insert);
 	if (rc != SQLITE_DONE) {
 		dberr(file_db, "insert may have failed (rc %d)", rc);
-	}
-	/* some users care what the row ID is */
-	if (row) {
-		*row = sqlite3_last_insert_rowid(file_db);
 	}
 	sqlite3_reset(insert);
 	sqlite3_clear_bindings(insert);
@@ -1833,9 +1874,12 @@ pdb_rename_file(const char *oldpath, pseudo_msg_t *msg) {
  */
 int
 pdb_renumber_all(dev_t from, dev_t to) {
-	static sqlite3_stmt *update;
+	static sqlite3_stmt *files_update, *xattrs_update;
 	int rc;
-	char *sql = "UPDATE files "
+	char *files_sql = "UPDATE files "
+		    " SET dev = ? "
+		    " WHERE dev = ?;";
+	char *xattrs_sql = "UPDATE xattrs "
 		    " SET dev = ? "
 		    " WHERE dev = ?;";
 
@@ -1843,31 +1887,52 @@ pdb_renumber_all(dev_t from, dev_t to) {
 		pseudo_diag("%s: database error.\n", __func__);
 		return 0;
 	}
-	if (!update) {
-		rc = sqlite3_prepare_v2(file_db, sql, strlen(sql), &update, NULL);
+	if (!files_update) {
+		rc = sqlite3_prepare_v2(file_db, files_sql, strlen(files_sql), &files_update, NULL);
 		if (rc) {
 			dberr(file_db, "couldn't prepare UPDATE statement");
 			return 1;
 		}
 	}
-	rc = sqlite3_bind_int(update, 1, to);
+	if (!xattrs_update) {
+		rc = sqlite3_prepare_v2(file_db, xattrs_sql, strlen(xattrs_sql), &xattrs_update, NULL);
+		if (rc) {
+			dberr(file_db, "couldn't prepare UPDATE statement");
+			return 1;
+		}
+	}
+	rc = sqlite3_bind_int(files_update, 1, to);
 	if (rc) {
 		dberr(file_db, "error binding device numbers to update");
 	}
-	rc = sqlite3_bind_int(update, 2, from);
+	rc = sqlite3_bind_int(files_update, 2, from);
+	if (rc) {
+		dberr(file_db, "error binding device numbers to update");
+	}
+	rc = sqlite3_bind_int(xattrs_update, 1, to);
+	if (rc) {
+		dberr(file_db, "error binding device numbers to update");
+	}
+	rc = sqlite3_bind_int(xattrs_update, 2, from);
 	if (rc) {
 		dberr(file_db, "error binding device numbers to update");
 	}
 
 	file_db_dirty = 1;
-	rc = sqlite3_step(update);
+	pseudo_debug(PDBGF_DB, "updating device dev %llu to %llu\n",
+		(unsigned long long) from, (unsigned long long) to);
+	rc = sqlite3_step(files_update);
 	if (rc != SQLITE_DONE) {
 		dberr(file_db, "update may have failed: rc %d", rc);
 	}
-	sqlite3_reset(update);
-	sqlite3_clear_bindings(update);
-	pseudo_debug(PDBGF_DB, "updating device dev %llu to %llu\n",
-		(unsigned long long) from, (unsigned long long) to);
+	sqlite3_reset(files_update);
+	sqlite3_clear_bindings(files_update);
+	rc = sqlite3_step(xattrs_update);
+	if (rc != SQLITE_DONE) {
+		dberr(file_db, "update may have failed: rc %d", rc);
+	}
+	sqlite3_reset(xattrs_update);
+	sqlite3_clear_bindings(xattrs_update);
 	return rc != SQLITE_DONE;
 }
 
@@ -1970,7 +2035,7 @@ pdb_update_file(pseudo_msg_t *msg) {
 
 /* find file using both path AND dev/inode as key */
 int
-pdb_find_file_exact(pseudo_msg_t *msg, long long *row) {
+pdb_find_file_exact(pseudo_msg_t *msg) {
 	static sqlite3_stmt *select;
 	int rc;
 	char *sql = "SELECT * FROM files WHERE path = ? AND dev = ? AND ino = ?;";
@@ -1998,9 +2063,6 @@ pdb_find_file_exact(pseudo_msg_t *msg, long long *row) {
 	rc = sqlite3_step(select);
 	switch (rc) {
 	case SQLITE_ROW:
-		if (row) {
-			*row = sqlite3_column_int64(select, 0);
-		}
 		msg->uid = (unsigned long) sqlite3_column_int64(select, 4);
 		msg->gid = (unsigned long) sqlite3_column_int64(select, 5);
 		msg->mode = (unsigned long) sqlite3_column_int64(select, 6);
@@ -2024,7 +2086,7 @@ pdb_find_file_exact(pseudo_msg_t *msg, long long *row) {
 
 /* find file using path as a key */
 int
-pdb_find_file_path(pseudo_msg_t *msg, long long *row) {
+pdb_find_file_path(pseudo_msg_t *msg) {
 	static sqlite3_stmt *select;
 	int rc;
 	char *sql = "SELECT * FROM files WHERE path = ?;";
@@ -2055,9 +2117,6 @@ pdb_find_file_path(pseudo_msg_t *msg, long long *row) {
 	rc = sqlite3_step(select);
 	switch (rc) {
 	case SQLITE_ROW:
-		if (row) {
-			*row = sqlite3_column_int64(select, 0);
-		}
 		msg->dev = sqlite3_column_int64(select, 2);
 		msg->ino = sqlite3_column_int64(select, 3);
 		msg->uid = sqlite3_column_int64(select, 4);
@@ -2133,7 +2192,7 @@ pdb_get_file_path(pseudo_msg_t *msg) {
 
 /* find file using dev/inode as key */
 int
-pdb_find_file_dev(pseudo_msg_t *msg, long long *row, char **path) {
+pdb_find_file_dev(pseudo_msg_t *msg, char **path) {
 	static sqlite3_stmt *select;
 	int rc;
 	char *sql = "SELECT * FROM files WHERE dev = ? AND ino = ?;";
@@ -2157,9 +2216,6 @@ pdb_find_file_dev(pseudo_msg_t *msg, long long *row, char **path) {
 	rc = sqlite3_step(select);
 	switch (rc) {
 	case SQLITE_ROW:
-		if (row) {
-			*row = sqlite3_column_int64(select, 0);
-		}
 		msg->uid = (unsigned long) sqlite3_column_int64(select, 4);
 		msg->gid = (unsigned long) sqlite3_column_int64(select, 5);
 		msg->mode = (unsigned long) sqlite3_column_int64(select, 6);
@@ -2188,12 +2244,12 @@ pdb_find_file_dev(pseudo_msg_t *msg, long long *row, char **path) {
 }
 
 int
-pdb_get_xattr(long long file_id, char **value, size_t *len) {
+pdb_get_xattr(pseudo_msg_t *msg, char **value, size_t *len) {
 	static sqlite3_stmt *select;
 	int rc;
 	char *response;
 	size_t length;
-	char *sql = "SELECT value FROM xattrs WHERE file_id = ? AND name = ?;";
+	char *sql = "SELECT value FROM xattrs WHERE dev  = ? AND ino = ? AND name = ?;";
 
 	if (!file_db && get_dbs()) {
 		pseudo_diag("%s: database error.\n", __func__);
@@ -2206,9 +2262,10 @@ pdb_get_xattr(long long file_id, char **value, size_t *len) {
 			return 1;
 		}
 	}
-	pseudo_debug(PDBGF_XATTR, "requested xattr named '%s' for file %lld\n", *value, file_id);
-	sqlite3_bind_int(select, 1, file_id);
-	rc = sqlite3_bind_text(select, 2, *value, -1, SQLITE_STATIC);
+	pseudo_debug(PDBGF_XATTR, "requested xattr named '%s' for ino %lld\n", *value, (long long) msg->ino);
+	sqlite3_bind_int(select, 1, msg->dev);
+	sqlite3_bind_int(select, 2, msg->ino);
+	rc = sqlite3_bind_text(select, 3, *value, -1, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to SELECT.");
 		return 1;
@@ -2249,22 +2306,13 @@ pdb_get_xattr(long long file_id, char **value, size_t *len) {
 }
 
 int
-pdb_list_xattr(long long file_id, char **value, size_t *len) {
+pdb_list_xattr(pseudo_msg_t *msg, char **value, size_t *len) {
 	static sqlite3_stmt *select;
 	size_t allocated = 0;
 	size_t used = 0;
 	char *buffer = 0;
 	int rc;
-	char *sql = "SELECT name FROM xattrs WHERE file_id = ? ORDER BY name;";
-
-	/* if we don't have a record of the file, it must not have
-	 * any extended attributes...
-	 */
-	if (file_id == -1) {
-		*value = NULL;
-		*len = 0;
-		return 0;
-	}
+	char *sql = "SELECT name FROM xattrs WHERE dev = ? AND ino = ? ORDER BY name;";
 
 	if (!file_db && get_dbs()) {
 		pseudo_diag("%s: database error.\n", __func__);
@@ -2277,7 +2325,8 @@ pdb_list_xattr(long long file_id, char **value, size_t *len) {
 			return 1;
 		}
 	}
-	sqlite3_bind_int(select, 1, file_id);
+	sqlite3_bind_int(select, 1, msg->dev);
+	sqlite3_bind_int(select, 2, msg->ino);
 	do {
 		rc = sqlite3_step(select);
 		if (rc == SQLITE_ROW) {
@@ -2314,10 +2363,10 @@ pdb_list_xattr(long long file_id, char **value, size_t *len) {
 }
 
 int
-pdb_remove_xattr(long long file_id, char *value, size_t len) {
+pdb_remove_xattr(pseudo_msg_t *msg, char *value, size_t len) {
 	static sqlite3_stmt *delete;
 	int rc;
-	char *sql = "DELETE FROM xattrs WHERE file_id = ? AND name = ?;";
+	char *sql = "DELETE FROM xattrs WHERE dev = ? AND ino = ? AND name = ?;";
 
 	if (!file_db && get_dbs()) {
 		pseudo_diag("%s: database error.\n", __func__);
@@ -2330,8 +2379,9 @@ pdb_remove_xattr(long long file_id, char *value, size_t len) {
 			return 1;
 		}
 	}
-	sqlite3_bind_int(delete, 1, file_id);
-	rc = sqlite3_bind_text(delete, 2, value, len, SQLITE_STATIC);
+	sqlite3_bind_int(delete, 1, msg->dev);
+	sqlite3_bind_int(delete, 2, msg->ino);
+	rc = sqlite3_bind_text(delete, 3, value, len, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to DELETE.");
 		return 1;
@@ -2347,14 +2397,14 @@ pdb_remove_xattr(long long file_id, char *value, size_t len) {
 }
 
 int
-pdb_set_xattr(long long file_id, char *value, size_t len, int flags) {
+pdb_set_xattr(pseudo_msg_t *msg, char *value, size_t len, int flags) {
 	static sqlite3_stmt *select, *update, *insert;
 	int rc;
 	long long existing_row = -1;
-	char *select_sql = "SELECT id FROM xattrs WHERE file_id = ? AND name = ?;";
+	char *select_sql = "SELECT id FROM xattrs WHERE dev = ? AND ino = ? AND name = ?;";
 	char *insert_sql = "INSERT INTO xattrs "
-		    " ( file_id, name, value ) "
-		    " VALUES (?, ?, ?);";
+		    " ( dev, ino, name, value ) "
+		    " VALUES (?, ?, ?, ?);";
 	char *update_sql = "UPDATE xattrs SET value = ? WHERE id = ?;";
 	char *vname = value;
 	size_t vlen;
@@ -2370,8 +2420,9 @@ pdb_set_xattr(long long file_id, char *value, size_t len, int flags) {
 			return 1;
 		}
 	}
-	sqlite3_bind_int(select, 1, file_id);
-	rc = sqlite3_bind_text(select, 2, value, -1, SQLITE_STATIC);
+	sqlite3_bind_int(select, 1, msg->dev);
+	sqlite3_bind_int(select, 2, msg->ino);
+	rc = sqlite3_bind_text(select, 3, value, -1, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to SELECT.");
 		return 1;
@@ -2404,8 +2455,8 @@ pdb_set_xattr(long long file_id, char *value, size_t len, int flags) {
 	vlen = strlen(value);
 	len = len - (vlen + 1);
 	value = value + vlen + 1;
-	pseudo_debug(PDBGF_XATTR, "trying to set a value for %lld: name is '%s' [%d/%d bytes], value is '%s' [%d bytes]. Existing row %lld.\n",
-		file_id, vname, (int) vlen, (int) (len + vlen + 1), value, (int) len, existing_row);
+	pseudo_debug(PDBGF_XATTR, "trying to set a value for ino %lld: name is '%s' [%d/%d bytes], value is '%s' [%d bytes]. Existing row %lld.\n",
+		(long long) msg->ino, vname, (int) vlen, (int) (len + vlen + 1), value, (int) len, existing_row);
 	if (existing_row != -1) {
 		/* update */
 		if (!update) {
@@ -2438,14 +2489,14 @@ pdb_set_xattr(long long file_id, char *value, size_t len, int flags) {
 				return 1;
 			}
 		}
-		pseudo_debug(PDBGF_XATTR, "insert should be getting ID %lld\n", file_id);
-		sqlite3_bind_int64(insert, 1, file_id);
-		rc = sqlite3_bind_text(insert, 2, vname, -1, SQLITE_STATIC);
+		sqlite3_bind_int64(insert, 1, msg->dev);
+		sqlite3_bind_int64(insert, 2, msg->ino);
+		rc = sqlite3_bind_text(insert, 3, vname, -1, SQLITE_STATIC);
 		if (rc) {
 			dberr(file_db, "couldn't bind xattr name to INSERT statement");
 			return 1;
 		}
-		rc = sqlite3_bind_text(insert, 3, value, len, SQLITE_STATIC);
+		rc = sqlite3_bind_text(insert, 4, value, len, SQLITE_STATIC);
 		if (rc) {
 			dberr(file_db, "couldn't bind xattr value to INSERT statement");
 			return 1;
@@ -2466,7 +2517,7 @@ pdb_set_xattr(long long file_id, char *value, size_t len, int flags) {
  * in for NFS usage.
  */
 int
-pdb_find_file_ino(pseudo_msg_t *msg, long long *row) {
+pdb_find_file_ino(pseudo_msg_t *msg) {
 	static sqlite3_stmt *select;
 	int rc;
 	char *sql = "SELECT * FROM files WHERE ino = ?;";
@@ -2489,9 +2540,6 @@ pdb_find_file_ino(pseudo_msg_t *msg, long long *row) {
 	rc = sqlite3_step(select);
 	switch (rc) {
 	case SQLITE_ROW:
-		if (row) {
-			*row = sqlite3_column_int64(select, 0);
-		}
 		msg->dev = (unsigned long) sqlite3_column_int64(select, 2);
 		msg->uid = (unsigned long) sqlite3_column_int64(select, 4);
 		msg->gid = (unsigned long) sqlite3_column_int64(select, 5);

@@ -308,7 +308,7 @@ main(int argc, char *argv[]) {
 			pseudo_diag("Couldn't allocate data structure for path.\n");
 			exit(EXIT_FAILURE);
 		}
-		if (pdb_find_file_path(msg, NULL)) {
+		if (pdb_find_file_path(msg)) {
 			pseudo_diag("Couldn't find a database entry for '%s'.\n", opt_i);
 			exit(EXIT_FAILURE);
 		}
@@ -440,7 +440,6 @@ int
 pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **response_path, size_t *response_len) {
 	pseudo_msg_t msg_header;
 	pseudo_msg_t by_path = { .op = 0 }, by_ino = { .op = 0 };
-	long long row = -1;
 	pseudo_msg_t db_header;
 	char *path_by_ino = 0;
 	char *oldpath = 0;
@@ -537,7 +536,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 	 */
 	/* Lookup the full path, with inode and dev if available */
 	if (msg->pathlen && msg->dev && msg->ino) {
-		if (!pdb_find_file_exact(msg, &row)) {
+		if (!pdb_find_file_exact(msg)) {
 			/* restore header contents */
 			by_path = *msg;
 			by_ino = *msg;
@@ -556,7 +555,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		if (msg->pathlen) {
 			/* for now, don't canonicalize paths anymore */
 			/* used to do it here, but now doing it in client */
-			if (!pdb_find_file_path(msg, &row)) {
+			if (!pdb_find_file_path(msg)) {
 				by_path = *msg;
 				found_path = 1;
 			} else {
@@ -567,7 +566,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		}
 		/* search on original inode -- in case of mismatch */
 		if (msg->dev && msg->ino) {
-			if (!pdb_find_file_dev(&by_ino, &row, &path_by_ino)) {
+			if (!pdb_find_file_dev(&by_ino, &path_by_ino)) {
 				found_ino = 1;
 			}
 		}
@@ -777,7 +776,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		if (!found_path) {
 			pseudo_debug(PDBGF_DB, "linking %s for OP_CREAT\n",
 				msg->pathlen ? msg->path : "no path");
-			pdb_link_file(msg, NULL);
+			pdb_link_file(msg);
 		} else {
 			/* again, an error, but leaving it alone for now. */
 			pseudo_diag("creat ignored for existing file '%s'.\n",
@@ -812,7 +811,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			pseudo_debug(PDBGF_FILE, "(new) ");
 			pseudo_debug(PDBGF_DB, "linking %s for OP_[F]CHMOD\n",
 				msg->pathlen ? msg->path : "no path");
-			pdb_link_file(msg, NULL);
+			pdb_link_file(msg);
 		}
 		break;
 	case OP_CHOWN:		/* FALLTHROUGH */
@@ -844,7 +843,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			pseudo_debug(PDBGF_FILE, "(new) ");
 			pseudo_debug(PDBGF_DB, "linking %s for OP_[F]CHOWN\n",
 				msg->pathlen ? msg->path : "no path");
-			pdb_link_file(msg, NULL);
+			pdb_link_file(msg);
 		}
 		break;
 	case OP_STAT:		/* FALLTHROUGH */
@@ -914,7 +913,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		pseudo_debug(PDBGF_DB, "linking %s for %s\n",
 			msg->pathlen ? msg->path : "no path",
 			pseudo_op_name(msg->op));
-		pdb_link_file(msg, NULL);
+		pdb_link_file(msg);
 		break;
 	case OP_RENAME:
 		/* a rename implies renaming an existing entry... and every
@@ -979,10 +978,10 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		pseudo_debug(PDBGF_DB, "linking %s for %s\n",
 			msg->pathlen ? msg->path : "no path",
 			pseudo_op_name(msg->op));
-		pdb_link_file(msg, NULL);
+		pdb_link_file(msg);
 		break;
 	case OP_GET_XATTR:
-		if (pdb_get_xattr(row, &oldpath, &oldpathlen)) {
+		if (pdb_get_xattr(msg, &oldpath, &oldpathlen)) {
 			msg->result = RESULT_FAIL;
 		} else {
 			*response_path = oldpath;
@@ -992,7 +991,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		}
 		break;
 	case OP_LIST_XATTR:
-		if (pdb_list_xattr(row, &oldpath, &oldpathlen)) {
+		if (pdb_list_xattr(msg, &oldpath, &oldpathlen)) {
 			msg->result = RESULT_FAIL;
 		} else {
 			pseudo_debug(PDBGF_XATTR, "got %d bytes of xattrs to list: %.*s\n", (int) oldpathlen, (int) oldpathlen, oldpath);
@@ -1009,28 +1008,12 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			xattr_flags = XATTR_REPLACE;
 		}
 	case OP_SET_XATTR:
-		/* we need a row entry to store xattr info */
-		if (row == -1) {
-#ifdef PSEUDO_XATTRDB
-			/* mark the entry as Not Reliable for purposes
-			 * of stat-type calls, since changes wouldn't
-			 * get reported to us.
-			 */
-			msg->uid = (uid_t) -1;
-			msg->gid = (gid_t) -1;
-#endif
-			pseudo_debug(PDBGF_DB | PDBGF_XATTR, "linking %s (uid -1 if xattr) for %s, mode 0%o\n",
-				msg->pathlen ? msg->path : "no path",
-				pseudo_op_name(msg->op),
-                                (int) msg->mode);
-			pdb_link_file(msg, &row);
-		}
-		if (pdb_set_xattr(row, oldpath, oldpathlen, xattr_flags)) {
+		if (pdb_set_xattr(msg, oldpath, oldpathlen, xattr_flags)) {
 			msg->result = RESULT_FAIL;
 		}
 		break;
 	case OP_REMOVE_XATTR:
-		pdb_remove_xattr(row, oldpath, oldpathlen);
+		pdb_remove_xattr(msg, oldpath, oldpathlen);
 		break;
 	default:
 		pseudo_diag("unknown op from client %d, op %d [%s]\n",
