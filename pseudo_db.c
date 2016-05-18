@@ -72,11 +72,11 @@ typedef struct { char *fmt; int arg; } id_row;
  */
 static id_row files_default_migrations[] = {
 	{ "%d, -1, 'N/A (initial setup)'", 8 },
-	{ NULL },
+	{ NULL, 0 },
 };
 static id_row logs_default_migrations[] = {
 	{ "%d, -1, 'N/A (initial setup)'", 7 },
-	{ NULL },
+	{ NULL, 0 },
 };
 /* This seemed like a really good idea at the time.  The idea is that these
  * structures let me write semi-abstract code to "create a database" without
