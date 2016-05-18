@@ -1,0 +1,2 @@
+# Added around 2011 to glibc
+int syncfs(int fd); /* async_skip=0 */

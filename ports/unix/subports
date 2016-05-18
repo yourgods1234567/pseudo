@@ -1,0 +1,12 @@
+#!/bin/sh
+cat > dummy.c <<EOF
+#include <unistd.h>
+int main(void) {
+	syncfs(0);
+	return 0;
+}
+EOF
+if ${CC} -o dummy dummy.c > /dev/null 2>&1; then
+	echo "unix/syncfs"
+fi
+rm -f dummy.c dummy

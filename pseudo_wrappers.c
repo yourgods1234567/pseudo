@@ -138,7 +138,6 @@ pseudo_init_one_wrapper(pseudo_function *func) {
 	if (f) {
 		*func->real = f;
 	} else {
-		e = dlerror();
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
 		char *s = func->name;
 		s += strlen(s) - 2;
@@ -146,11 +145,13 @@ pseudo_init_one_wrapper(pseudo_function *func) {
 		if (!strcmp(s, "at")) {
 			return;
 		}
-#else
+#endif
+		e = dlerror();
 		if (e != NULL) {
 			pseudo_diag("No real function for %s: %s\n", func->name, e);
+		} else {
+			pseudo_diag("No real function for %s, but dlerror NULL.\n", func->name);
 		}
-#endif
 	}
 }
 

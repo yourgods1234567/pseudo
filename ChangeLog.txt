@@ -1,3 +1,16 @@
+2016-05-18:
+	* (seebs) move syncfs to a subport so it can be enabled only on
+	  systems which have it.
+	* (seebs) make pseudo_foo() wrappers for mknod/mknodat, similar to
+	  the ones for stat/fstat, because Linux doesn't actually have mknod
+	  (or stat) in glibc.
+	* Post diagnostic for missing real_foo() functions even when dlerror
+	  doesn't give a specific error.
+	* All of this because ld.so started giving dlerror results for
+	  missing functions with RTLD_NEXT. It turns out we were failing to
+	  notice some missing functions. None of them actually mattered, but
+	  it's worth fixing.
+
 2016-05-12:
 	* (seebs) merge kergoth's fix to respect $(LDFLAGS) from environment.
 	* (seebs) call this 1.8.0
