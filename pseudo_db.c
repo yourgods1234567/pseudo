@@ -1595,10 +1595,6 @@ pdb_check_xattrs(pseudo_msg_t *msg) {
 	if (rc != SQLITE_DONE) {
 		dberr(file_db, "not done after the single row we expected?", rc);
 	}
-	rc = sqlite3_finalize(scan);
-	if (rc) {
-		dberr(file_db, "couldn't finalize existing file");
-	}
 	sqlite3_reset(scan);
 	sqlite3_clear_bindings(scan);
 
