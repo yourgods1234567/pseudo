@@ -135,7 +135,7 @@ static struct sql_table {
 	    "gid INTEGER, "
 	    "access INTEGER, "
 	    "program VARCHAR, "
-	    "type INTEGER, "
+	    "type INTEGER"
 	    ,
 	  NULL,
 	  NULL },
