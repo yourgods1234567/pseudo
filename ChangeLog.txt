@@ -1,3 +1,9 @@
+2016-07-08:
+	* (RP) release 1.8.1
+	* (joshuagl) Fix log table creation issue
+	* (joshuagl) Fix sqlite usage pseudo segfault
+	* (joshuagl) Fix directory permissions for build
+
 2016-05-18:
 	* (seebs) move syncfs to a subport so it can be enabled only on
 	  systems which have it.
