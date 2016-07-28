@@ -39,7 +39,7 @@ typedef struct {
 
 extern int pdb_maybe_backup(void);
 extern int pdb_cancel_unlink_file(pseudo_msg_t *msg);
-extern int pdb_did_unlink_file(char *path, int deleting);
+extern int pdb_did_unlink_file(char *path, pseudo_msg_t *msg, int deleting);
 extern int pdb_did_unlink_files(int deleting);
 extern int pdb_link_file(pseudo_msg_t *msg);
 extern int pdb_may_unlink_file(pseudo_msg_t *msg, int deleting);

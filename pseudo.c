@@ -600,7 +600,12 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 				if (by_path.deleting != 0) {
 					pseudo_debug(PDBGF_FILE, "inode mismatch for '%s' -- old one was marked for deletion, deleting.\n",
 						msg->path);
-					pdb_did_unlink_file(msg->path, by_path.deleting);
+					/* in this case, we don't trust the
+					 * existing entries, so we will do the
+					 * more expensive sweep for stray
+					 * xattrs.
+					 */
+					pdb_did_unlink_file(msg->path, NULL, by_path.deleting);
 				} else {
 					pseudo_diag("inode mismatch: '%s' ino %llu in db, %llu in request.\n",
 						msg->path,
@@ -698,7 +703,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 				if (by_ino.deleting != 0) {
 					pseudo_debug(PDBGF_FILE, "inode mismatch for '%s' -- old one was marked for deletion, deleting.\n",
 						msg->path);
-					pdb_did_unlink_file(path_by_ino, by_ino.deleting);
+					pdb_did_unlink_file(path_by_ino, &by_ino, by_ino.deleting);
 				} else {
 					pseudo_diag("path mismatch [%d link%s]: ino %llu db '%s' req '%s'.\n",
 						msg->nlink,
@@ -930,7 +935,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		}
 		break;
 	case OP_DID_UNLINK:
-		pdb_did_unlink_file(msg->path, msg->client);
+		pdb_did_unlink_file(msg->path, msg, msg->client);
 		break;
 	case OP_CANCEL_UNLINK:
 		pdb_cancel_unlink_file(msg);
