@@ -1486,7 +1486,6 @@ pdb_clear_unused_xattrs(void) {
 		dberr(file_db, "delete of unused xattrs may have failed");
 	}
 	sqlite3_reset(delete);
-	sqlite3_clear_bindings(delete);
 }
 
 /* we want to delete extended attributes for a device/inode if there

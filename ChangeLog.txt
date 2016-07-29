@@ -1,3 +1,6 @@
+2016-07-29:
+	* (seebs) Don't clear bindings for a statement with no bindings.
+
 2016-07-28:
 	* (seebs) Fix performance issue on deletion with xattr changes.
 
