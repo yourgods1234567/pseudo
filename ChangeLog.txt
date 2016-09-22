@@ -1,3 +1,6 @@
+2016-09-22:
+	* (seebs) don't send SIGUSR1 to init.
+
 2016-07-29:
 	* (seebs) Don't clear bindings for a statement with no bindings.
 

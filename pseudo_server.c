@@ -358,9 +358,14 @@ pseudo_server_start(int daemonize) {
 	signal(SIGTERM, quit_now);
 	/* tell parent process to stop waiting */
 	if (daemonize) {
-		pseudo_diag("Setup complete, sending SIGUSR1 to pid %d.\n",
-			getppid());
-		kill(getppid(), SIGUSR1);
+		pid_t ppid = getppid();
+		if (ppid == 1) {
+			pseudo_diag("Setup complete, but parent is init, not sending SIGUSR1.\n");
+		} else {
+			pseudo_diag("Setup complete, sending SIGUSR1 to pid %d.\n",
+				ppid);
+			kill(ppid, SIGUSR1);
+		}
 	}
 	pseudo_server_loop();
 	return 0;
