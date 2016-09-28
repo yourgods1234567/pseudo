@@ -162,6 +162,9 @@ pseudo_server_start(int daemonize) {
 	 * SIGUSR1, or until too much time has passed. */
 	if (daemonize) {
 		int child;
+
+		/* make startup messages go away when invoked-as-daemon */
+		pseudo_debug_logfile(PSEUDO_LOGFILE, 2);
 		child = fork();
 		if (child == -1) {
 			pseudo_diag("Couldn't fork child process: %s\n",
@@ -231,7 +234,6 @@ pseudo_server_start(int daemonize) {
 			setsid();
 			fclose(stdin);
 			fclose(stdout);
-			pseudo_debug_logfile(PSEUDO_LOGFILE, 2);
 			/* and then just execute the server code normally.  */
 			/* Any logging will presumably go to logfile, but
 			 * exit status will make it back to the parent for
