@@ -2,6 +2,9 @@
 	* (seebs) Send errors to log when daemonizing, but do that a lot
 	  sooner to prevent startup messages which can show up spuriously
 	  with multiple clients.
+	* (seebs) return file descriptor from pseudo_logfile, so we set
+	  pseudo_util_debug_fd to the right value instead of to stdin.
+	  Nice bug.
 
 2016-09-22:
 	* (seebs) don't send SIGUSR1 to init.

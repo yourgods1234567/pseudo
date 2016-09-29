@@ -1569,7 +1569,7 @@ pseudo_logfile(char *filename, char *defname, int prefer_fd) {
 	if (fd == -1)
 		return -1;
 	else
-		return 0;
+		return fd;
 }
 
 int
@@ -1579,6 +1579,7 @@ pseudo_debug_logfile(char *defname, int prefer_fd) {
 
 	fd = pseudo_logfile(filename, defname, prefer_fd);
 	if (fd > -1) {
+		pseudo_diag("debug_logfile: fd %d\n", fd);
 		pseudo_util_debug_fd = fd;
 		return 0;
 	}
