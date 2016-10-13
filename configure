@@ -207,6 +207,7 @@ if [ "${opt_cflags-UNSET}" = "UNSET" ]; then
 else
     arch_flags=$opt_cflags
 fi
+arch_flags=$(echo "$arch_flags" | sed -e 's/,/\\,/g')
 
 if $use_maybe_rpath && [ -n "$maybe_rpath" ]; then
     echo >&2 "Adding default RPATH for sqlite."

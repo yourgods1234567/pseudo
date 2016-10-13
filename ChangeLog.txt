@@ -1,3 +1,6 @@
+2016-10-13:
+	* (seebs) handle commas in CFLAGS
+
 2016-09-30:
 	* (seebs) Fix rename at, matching fix from ee00f63d for rename. Bug
 	  and fix provided by Anton Gerasimov <anton@advancedtelematic.com>.
