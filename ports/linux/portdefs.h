@@ -20,7 +20,7 @@
  */
 #define GLIBC_COMPAT_SYMBOL(sym, ver) __asm(".symver " #sym "," #sym "@GLIBC_" #ver)
 
-#ifdef __amd64__   
+#if defined(__amd64__) && !defined(__ILP32__)
 GLIBC_COMPAT_SYMBOL(memcpy,2.2.5);
 #elif defined(__i386__)
 GLIBC_COMPAT_SYMBOL(memcpy,2.0);

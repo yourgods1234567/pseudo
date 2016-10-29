@@ -1,3 +1,6 @@
+2016-10-29:
+	* (seebs) handle x32
+
 2016-10-13:
 	* (seebs) handle commas in CFLAGS
 
