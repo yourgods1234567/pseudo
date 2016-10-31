@@ -1566,10 +1566,7 @@ pseudo_logfile(char *filename, char *defname, int prefer_fd) {
 		pseudo_util_debug_fd = fd;
 	}
 	free(pseudo_path);
-	if (fd == -1)
-		return -1;
-	else
-		return fd;
+	return fd;
 }
 
 int
