@@ -496,10 +496,13 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			/* For a rename op, we want to strip any trailing
 			 * slashes. For xattr, "oldpath" is the raw data
 			 * to be stored. */
-			if (oldpathlen > 0 && msg->op == OP_RENAME) {
-				if (oldpath[oldpathlen - 1] == '/') {
+			if (msg->op == OP_RENAME) {
+				if (oldpathlen > 0 && oldpath[oldpathlen - 1] == '/') {
 					oldpath[--oldpathlen] = '\0';
 				}
+			} else {
+				/* disregard the trailing null */
+				--oldpathlen;
 			}
 			/* if we got an oldpath, but a 0-length initial
 			 * path, we don't want to act as though we had

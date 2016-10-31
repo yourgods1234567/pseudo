@@ -1,4 +1,8 @@
 2016-10-31:
+	* (seebs) match comments by ACTUALLY trimming the null byte
+	  on xattrs on write.
+
+2016-10-31:
 	* (seebs) drop silly if
 
 2016-10-29:
