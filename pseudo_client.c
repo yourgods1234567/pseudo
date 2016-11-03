@@ -1676,7 +1676,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	 * empty path for that.
 	 */
 	if (path_extra_1) {
-		size_t full_len = path_extra_1len + 1 + pathlen;
+		size_t full_len = path_extra_1len + 1 + pathlen - strip_slash;
 		size_t partial_len = pathlen - 1 - strip_slash;
 		if (path_extra_2) {
 			full_len += path_extra_2len + 1;
