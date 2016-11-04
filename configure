@@ -37,6 +37,7 @@ compile_x86_64=-m64
 
 usage()
 {
+    [ -n "$*" ] && echo >&2 "$*"
     echo >&2 "usage:"
     echo >&2 "  configure --prefix=..."
     echo >&2 "           [--libdir=...]"
@@ -215,7 +216,7 @@ if $use_maybe_rpath && [ -n "$maybe_rpath" ]; then
 fi
 
 if [ -z "$opt_prefix" ]; then
-    usage
+    usage "Error: You must specify a prefix path for installation (--prefix=)."
 fi
 
 if [ -z "$opt_libdir" ]; then
