@@ -1357,7 +1357,7 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 }
 
 int
-pseudo_client_shutdown(void) {
+pseudo_client_shutdown(int wait_on_socket) {
 	pseudo_msg_t msg;
 	pseudo_msg_t *ack;
 	char *pseudo_path;
@@ -1428,12 +1428,17 @@ pseudo_client_shutdown(void) {
 		pseudo_diag("server did not respond to shutdown query.\n");
 		return 1;
 	}
-	if (ack->type == PSEUDO_MSG_ACK) {
-		return 0;
+	if (ack->type != PSEUDO_MSG_ACK) {
+		pseudo_diag("Server refused shutdown.  Remaining client fds: %d\n", ack->fd);
+		pseudo_diag("Client pids: %s\n", ack->path);
+		pseudo_diag("Server will shut down after all clients exit.\n");
 	}
-	pseudo_diag("Server refused shutdown.  Remaining client fds: %d\n", ack->fd);
-	pseudo_diag("Client pids: %s\n", ack->path);
-	pseudo_diag("Server will shut down after all clients exit.\n");
+	if (wait_on_socket) {
+		/* try to receive a message the server won't send;
+		 * this should abort/error-out when the server actually
+		 * shuts down. */
+		ack = pseudo_msg_receive(connect_fd);
+	}
 	return 0;
 }
 

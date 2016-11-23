@@ -334,7 +334,7 @@ main(int argc, char *argv[]) {
 
         /* If you didn't specify a command, opt_S shuts down here. */
 	if (opt_S && argc <= optind) {
-		return pseudo_client_shutdown();
+		return pseudo_client_shutdown(0);
 	}
 
 	if (opt_d && opt_f) {
@@ -409,7 +409,7 @@ main(int argc, char *argv[]) {
 			 * the server.
 			 */
                         if (opt_S) {
-				pseudo_client_shutdown();
+				pseudo_client_shutdown(1);
                         }
 			if (WIFEXITED(rc)) {
 				return WEXITSTATUS(rc);
