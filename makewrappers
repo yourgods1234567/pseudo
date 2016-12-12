@@ -453,6 +453,8 @@ additional ports to include.
 """
 
     def __init__(self, port, sources):
+        if type(port) is not str:
+            port = str(port, encoding="ascii")
         self.name = port
         self.subports = []
         self.preports = []
@@ -483,7 +485,7 @@ additional ports to include.
             if retcode:
                 raise Exception("preports script failed for port %s" % self.name)
 
-            for preport in string.split(portlist):
+            for preport in portlist.split():
                 next = Port(preport, sources)
                 self.preports.append(next)
 
@@ -494,7 +496,7 @@ additional ports to include.
             if retcode:
                 raise Exception("subports script failed for port %s" % self.name)
 
-            for subport in string.split(portlist):
+            for subport in portlist.split():
                 next = Port(subport, sources)
                 self.subports.append(next)
 
@@ -519,7 +521,7 @@ additional ports to include.
         return mergedfuncs
 
     def define(self):
-        return '#define PSEUDO_PORT_%s 1' % string.upper(self.name).replace('/', '_')
+        return '#define PSEUDO_PORT_%s 1' % self.name.upper().replace('/', '_')
 
     def portdeps(self):
         deps = []

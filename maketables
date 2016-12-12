@@ -51,6 +51,7 @@ value.  (This is for consistency with C array bounds.)
 import glob
 import sys
 import string
+import os
 from templatefile import TemplateFile
 
 class DataType:
@@ -58,74 +59,74 @@ class DataType:
 
     def __init__(self, path):
         """read the first line of path, then make tuples of the rest"""
-        source = file(path)
-        definition = source.readline().rstrip()
-        self.name, qualifiers = string.split(definition, ': ', 2)
-        if '; ' in qualifiers:
-            self.prefix, columns = string.split(qualifiers, '; ')
-        else:
-            self.prefix = qualifiers
-            columns = []
-        self.flags = False
-        if len(columns):
-            self.columns = []
-            columns = string.split(columns, ', ')
-            for col in columns:
-                indexed = False
-                if col.startswith("FLAGS"):
-                    print("Flags: set for %s" % self.name)
-                    self.flags = True
+        with open(path,'r') as source:
+            definition = source.readline().rstrip()
+            self.name, qualifiers = definition.split(': ', 2)
+            if '; ' in qualifiers:
+                self.prefix, columns = qualifiers.split('; ')
+            else:
+                self.prefix = qualifiers
+                columns = []
+            self.flags = False
+            if len(columns):
+                self.columns = []
+                columns = columns.split(', ')
+                for col in columns:
+                    indexed = False
+                    if col.startswith("FLAGS"):
+                        print("Flags: set for %s" % self.name)
+                        self.flags = True
+                        continue
+                    if col.startswith("INDEXED "):
+                        col = col[8:]
+                        indexed = True
+                    if "=" in col:
+                        name, default = col.split(' = ')
+                    else:
+                        name, default = col, ""
+                    if " " in name:
+                        words = name.split(' ')
+                        name = words[-1]
+                        del words[-1]
+                        type = ' '.join(words)
+                    else:
+                        type = "char *"
+                    self.columns.append({"indexed":indexed, "type":type, "name":name, "value":default})
+            else:
+                self.columns = []
+            self.data = []
+            self.comments = []
+            index = 1
+            for line in source.readlines():
+                item = {}
+                if line.startswith('#'):
+                    self.comments.append(line.rstrip().replace('#', ''))
                     continue
-                if col.startswith("INDEXED "):
-                    col = col[8:]
-                    indexed = True
-                if "=" in col:
-                    name, default = string.split(col, ' = ')
-                else:
-                    name, default = col, ""
-                if " " in name:
-                    words = string.split(name, ' ')
-                    name = words[-1]
-                    del words[-1]
-                    type = ' '.join(words)
-                else:
-                    type = "char *"
-                self.columns.append({"indexed":indexed, "type":type, "name":name, "value":default})
-        else:
-            self.columns = []
-        self.data = []
-        self.comments = []
-        index = 1
-        for line in source.readlines():
-            item = {}
-            if line.startswith('#'):
-                self.comments.append(line.rstrip().replace('#', ''))
-                continue
-            # first entry on the line is the "real" name/id, following hunks
-            # are additional columns
-            cols = string.split(line.rstrip(), ', ')
-            item["name"] = cols.pop(0)
-            item["upper"] = item["name"].replace('-', '_').upper()
-            column_list = []
-            for col in self.columns:
-                if len(cols) > 0:
-                    value = cols.pop(0)
-                    if col["indexed"]:
-                        if not "max" in col:
-                            col["max"] = value
-                        if value > col["max"]:
-                            col["max"] = value
-                        if not "min" in col:
-                            col["min"] = value
-                        if value < col["min"]:
-                            col["min"] = value
-                    column_list.append({"name":col["name"], "value":value})
-                else:
-                    column_list.append({"name":col["name"], "value":col["value"]})
-            item["cols"] = column_list
-            item["index"] = index
-            index = index + 1
-            self.data.append(item)
+                # first entry on the line is the "real" name/id, following hunks
+                # are additional columns
+                cols = line.rstrip().split(', ')
+                item["name"] = cols.pop(0)
+                item["upper"] = item["name"].replace('-', '_').upper()
+                column_list = []
+                for col in self.columns:
+                    if len(cols) > 0:
+                        value = cols.pop(0)
+                        if col["indexed"]:
+                            if not "max" in col:
+                                col["max"] = value
+                            if value > col["max"]:
+                                col["max"] = value
+                            if not "min" in col:
+                                col["min"] = value
+                            if value < col["min"]:
+                                col["min"] = value
+                        column_list.append({"name":col["name"], "value":value})
+                    else:
+                        column_list.append({"name":col["name"], "value":col["value"]})
+                item["cols"] = column_list
+                item["index"] = index
+                index = index + 1
+                self.data.append(item)
 
     def __getitem__(self, key):
         """Make this object look like a dict for Templates to use"""

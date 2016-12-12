@@ -1,6 +1,8 @@
 2016-12-12:
 	* (seebs) contributed fix to makewrappers (fix space/tab issues)
 	* (seebs) contributed fixes for Python 3 print support
+	* (seebs) contributed fixes for Python 3 support
+	* All of these from: Gaël PORTAY <gael.portay@savoirfairelinux.com>
 
 2016-11-23:
 	* (seebs) actually wait on server shutdown for pseudo -S [cmd]
