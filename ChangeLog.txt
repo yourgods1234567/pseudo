@@ -1,5 +1,6 @@
 2016-12-12:
 	* (seebs) contributed fix to makewrappers (fix space/tab issues)
+	* (seebs) contributed fixes for Python 3 print support
 
 2016-11-23:
 	* (seebs) actually wait on server shutdown for pseudo -S [cmd]

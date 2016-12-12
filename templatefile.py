@@ -79,13 +79,13 @@ class TemplateFile:
                 return
             path = Template(self.path).safe_substitute(item)
             if os.path.exists(path):
-                # print "We don't overwrite existing files."
+                # print("We don't overwrite existing files.")
                 return
             self.file = open(path, 'w')
             if not self.file:
-                print "Couldn't open '%s' (expanded from %s), " \
+                print("Couldn't open '%s' (expanded from %s), " \
                       "not emitting '%s'." % \
-                      (path, self.path, template)
+                      (path, self.path, template))
                 return
 
     def emit(self, template, item=None):
@@ -103,7 +103,7 @@ class TemplateFile:
                     self.file.write(templ.safe_substitute(item))
                     self.file.write("\n")
         else:
-            print "Warning: Unknown template '%s'." % template
+            print("Warning: Unknown template '%s'." % template)
 
         if self.file_per_item:
             if self.file:

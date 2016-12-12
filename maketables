@@ -73,7 +73,7 @@ class DataType:
             for col in columns:
                 indexed = False
                 if col.startswith("FLAGS"):
-                    print "Flags: set for %s" % self.name
+                    print("Flags: set for %s" % self.name)
                     self.flags = True
                     continue
                 if col.startswith("INDEXED "):
@@ -248,7 +248,7 @@ def main():
             template_file.emit('header')
             templates.append(template_file)
         except IOError:
-            print "Invalid or malformed template %s.  Aborting." % path
+            print("Invalid or malformed template %s.  Aborting." % path)
             exit(1)
 
     for filename in sys.argv[1:]:
@@ -256,15 +256,15 @@ def main():
         sys.stdout.write("%s: " % filename)
         datatype = DataType(filename)
         datatypes.append(datatype)
-        print datatype.__repr__()
-        print ""
+        print(datatype.__repr__())
+        print("")
 
-    print "Writing datatypes...",
+    print("Writing datatypes...")
     for datatype in datatypes:
         # populate various tables and files with each datatype
         for template_file in templates:
             template_file.emit('body', datatype)
-    print "done.  Cleaning up."
+    print("done.  Cleaning up.")
     
     for template_file in templates:
         # clean up files

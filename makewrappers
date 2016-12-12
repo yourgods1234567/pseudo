@@ -456,7 +456,7 @@ additional ports to include.
         self.name = port
         self.subports = []
         self.preports = []
-        print port
+        print(port)
 
         if os.path.exists(self.portfile("pseudo_wrappers.c")):
             self.wrappers = self.portfile("pseudo_wrappers.c")
@@ -504,17 +504,17 @@ additional ports to include.
             prefuncs = pre.functions()
             for name in prefuncs.keys():
                 if name in mergedfuncs:
-                    print "Warning: %s from %s overriding %s" % (name, pre.name, mergedfuncs[name].port)
+                    print("Warning: %s from %s overriding %s" % (name, pre.name, mergedfuncs[name].port))
                 mergedfuncs[name] = prefuncs[name]
         for name in self.funcs.keys():
             if name in mergedfuncs:
-                print "Warning: %s from %s overriding %s" % (name, self.name, mergedfuncs[name].port)
+                print("Warning: %s from %s overriding %s" % (name, self.name, mergedfuncs[name].port))
             mergedfuncs[name] = self.funcs[name]
         for sub in self.subports:
             subfuncs = sub.functions()
             for name in subfuncs.keys():
                 if name in mergedfuncs:
-                    print "Warning: %s from %s overriding %s" % (name, sub.name, mergedfuncs[name].port)
+                    print("Warning: %s from %s overriding %s" % (name, sub.name, mergedfuncs[name].port))
                 mergedfuncs[name] = subfuncs[name]
         return mergedfuncs
 
@@ -576,11 +576,11 @@ def process_wrapfuncs(port):
             func.directory = directory
             funcs[func.name] = func
             sys.stdout.write(".")
-        except Exception, e:
-            print "Parsing failed:", e
+        except Exception(e):
+            print("Parsing failed:", e)
             exit(1)
     funclist.close()
-    print ""
+    print("")
     return funcs
 
 def main(argv):
@@ -599,35 +599,35 @@ def main(argv):
 
     for path in glob.glob('templates/*'):
         try:
-            print "Considering template: " + path
+            print("Considering template: " + path)
             source = TemplateFile(path)
             if source.name.endswith('.c') or source.name.endswith('.h'):
                 source.emit('copyright')
             source.emit('header')
             sources.append(source)
         except IOError:
-            print "Invalid or malformed template %s.  Aborting." % path
+            print("Invalid or malformed template %s.  Aborting." % path)
             exit(1)
 
     try:
         port = Port('common', sources)
 
     except KeyError:
-        print "Unknown uname -s result: '%s'." % uname_s
-        print "Known system types are:"
-        print "%-20s %-10s %s" % ("uname -s", "port name", "description")
+        print("Unknown uname -s result: '%s'." % uname_s)
+        print("Known system types are:")
+        print("%-20s %-10s %s" % ("uname -s", "port name", "description"))
         for key in host_ports:
-            print "%-20s %-10s %s" % (key, host_ports[key],
-                                      host_descrs[host_ports[key]])
+            print("%-20s %-10s %s" % (key, host_ports[key],
+                                      host_descrs[host_ports[key]]))
 
     # the per-function stuff
-    print "Writing functions...",
+    print("Writing functions...")
     all_funcs = port.functions()
     for name in sorted(all_funcs.keys()):
         # populate various tables and files with each function
         for source in sources:
             source.emit('body', all_funcs[name])
-    print "done.  Cleaning up."
+    print("done.  Cleaning up.")
     
     for source in sources:
         # clean up files
