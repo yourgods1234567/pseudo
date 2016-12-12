@@ -98,8 +98,18 @@ extern int (*pseudo_real_lsetxattr)(const char *, const char *, const void *, si
 extern int (*pseudo_real_fsetxattr)(int, const char *, const void *, size_t, int);
 #endif
 
+static void libpseudo_atfork_child(void)
+{
+	pthread_mutex_init(&pseudo_mutex, NULL);
+	pseudo_mutex_recursion = 0;
+	pseudo_mutex_holder = 0;
+}
+
 static void
 _libpseudo_init(void) {
+	if (!_libpseudo_initted)
+		pthread_atfork(NULL, NULL, libpseudo_atfork_child);
+
 	pseudo_getlock();
 	pseudo_antimagic();
 	_libpseudo_initted = 1;
