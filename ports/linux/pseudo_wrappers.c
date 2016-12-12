@@ -42,3 +42,10 @@ int
 pseudo_mknodat(int dirfd, const char *path, mode_t mode, dev_t dev) {
 	return real___xmknodat(_MKNOD_VER, dirfd, path, mode, &dev);
 }
+
+int pseudo_capset(cap_user_header_t hdrp, const cap_user_data_t datap) {
+	(void)hdrp;
+	(void)datap;
+
+	return 0;
+}

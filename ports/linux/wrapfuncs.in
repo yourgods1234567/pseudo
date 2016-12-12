@@ -53,3 +53,4 @@ int euidaccess(const char *path, int mode);
 int getpw(uid_t uid, char *buf);
 int getpwent_r(struct passwd *pwbuf, char *buf, size_t buflen, struct passwd **pwbufp);
 int getgrent_r(struct group *gbuf, char *buf, size_t buflen, struct group **gbufp);
+int capset(cap_user_header_t hdrp, const cap_user_data_t datap); /* real_func=pseudo_capset */

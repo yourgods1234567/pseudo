@@ -25,3 +25,5 @@ GLIBC_COMPAT_SYMBOL(memcpy,2.2.5);
 #elif defined(__i386__)
 GLIBC_COMPAT_SYMBOL(memcpy,2.0);
 #endif
+
+#include <linux/capability.h>

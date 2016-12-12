@@ -5,6 +5,7 @@
 	* All of these from: Gaël PORTAY <gael.portay@savoirfairelinux.com>
 	* (seebs) import fix from Rabin Vincent for test case
 	* (seebs) import fix from Rabin Vincent for pthread mutexes
+	* (seebs) import fix from George McCollister for capset.
 
 2016-11-23:
 	* (seebs) actually wait on server shutdown for pseudo -S [cmd]
