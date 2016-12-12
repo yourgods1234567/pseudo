@@ -6,6 +6,7 @@
 	* (seebs) import fix from Rabin Vincent for test case
 	* (seebs) import fix from Rabin Vincent for pthread mutexes
 	* (seebs) import fix from George McCollister for capset.
+	* (seebs) import fix from Igor Gnatenko for man page sections.
 
 2016-11-23:
 	* (seebs) actually wait on server shutdown for pseudo -S [cmd]
