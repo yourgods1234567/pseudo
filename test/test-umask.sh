@@ -4,6 +4,8 @@ mode() {
 	ls -l "$1" | awk '{ print $1 }'
 }
 
+rm -f a b
+
 # Verify normal operation...
 umask 022
 touch a
