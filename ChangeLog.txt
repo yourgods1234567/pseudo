@@ -1,5 +1,6 @@
 2017-02-01:
 	* (seebs) handle xattr deletion slightly more carefully.
+	* (seebs) tag this as 1.8.2
 
 2016-12-12:
 	* (seebs) contributed fix to makewrappers (fix space/tab issues)
