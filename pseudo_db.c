@@ -1495,7 +1495,7 @@ pdb_clear_unused_xattrs(void) {
 static void
 pdb_clear_xattrs(pseudo_msg_t *msg) {
 	static sqlite3_stmt *delete;
-	char *delete_sql = "DELETE FROM xattrs WHERE dev = ? AND ino = ?;";
+	char *delete_sql = "DELETE FROM xattrs WHERE dev = ? AND ino = ? AND (SELECT COUNT(*) FROM files WHERE dev = ? AND ino = ?) = 0;";
 	int rc;
 
 	if (!msg)
@@ -1507,12 +1507,14 @@ pdb_clear_xattrs(pseudo_msg_t *msg) {
 	if (!delete) {
 		rc = sqlite3_prepare_v2(file_db, delete_sql, strlen(delete_sql), &delete, NULL);
 		if (rc) {
-			dberr(file_db, "couldn't prepare DELETE statement for unused xattrs");
+			dberr(file_db, "couldn't prepare DELETE statement for specific inode xattrs");
 			return;
 		}
 	}
 	sqlite3_bind_int(delete, 1, msg->dev);
 	sqlite3_bind_int(delete, 2, msg->ino);
+	sqlite3_bind_int(delete, 3, msg->dev);
+	sqlite3_bind_int(delete, 4, msg->ino);
 	rc = sqlite3_step(delete);
 	if (rc != SQLITE_DONE) {
 		dberr(file_db, "delete of unused xattrs may have failed");
