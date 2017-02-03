@@ -84,7 +84,7 @@ TABLES=table_templates/pseudo_tables.c table_templates/pseudo_tables.h
 
 all: $(LIBPSEUDO) $(PSEUDO) $(PSEUDODB) $(PSEUDOLOG) $(PSEUDO_PROFILE)
 
-test: all $(BIN) $(LIB) $(LOCALSTATE)
+test: all | $(BIN) $(LIB) $(LOCALSTATE)
 	@./run_tests.sh -v
 
 install-lib: $(LIBPSEUDO)
@@ -106,26 +106,26 @@ $(BIN) $(LIB) $(LOCALSTATE):
 
 pseudo: $(PSEUDO)
 
-$(PSEUDO): $(BIN) pseudo.o $(SHOBJS) $(DBOBJS) pseudo_client.o pseudo_server.o pseudo_ipc.o
+$(PSEUDO): pseudo.o $(SHOBJS) $(DBOBJS) pseudo_client.o pseudo_server.o pseudo_ipc.o | $(BIN)
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o $(PSEUDO) \
 		pseudo.o pseudo_server.o pseudo_client.o pseudo_ipc.o \
 		$(DBOBJS) $(SHOBJS) $(LDFLAGS) $(DB_LDFLAGS) $(CLIENT_LDFLAGS)
 
 pseudolog: $(PSEUDOLOG)
 
-$(PSEUDOLOG): $(BIN) pseudolog.o $(SHOBJS) $(DBOBJS) pseudo_client.o pseudo_ipc.o
+$(PSEUDOLOG): pseudolog.o $(SHOBJS) $(DBOBJS) pseudo_client.o pseudo_ipc.o | $(BIN)
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o $(PSEUDOLOG) pseudolog.o pseudo_client.o pseudo_ipc.o \
 		$(DBOBJS) $(SHOBJS) $(LDFLAGS) $(DB_LDFLAGS) $(CLIENT_LDFLAGS)
 
 pseudodb: $(PSEUDODB)
 
-$(PSEUDODB): $(BIN) pseudodb.o $(SHOBJS) $(DBOBJS) pseudo_ipc.o
+$(PSEUDODB): pseudodb.o $(SHOBJS) $(DBOBJS) pseudo_ipc.o | $(BIN)
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o $(PSEUDODB) pseudodb.o \
 		$(DBOBJS) $(SHOBJS) pseudo_ipc.o $(LDFLAGS) $(DB_LDFLAGS) $(CLIENT_LDFLAGS)
 
 libpseudo: $(LIBPSEUDO)
 
-$(LIBPSEUDO): $(LIB) $(WRAPOBJS) pseudo_client.o pseudo_ipc.o $(SHOBJS)
+$(LIBPSEUDO): $(WRAPOBJS) pseudo_client.o pseudo_ipc.o $(SHOBJS) | $(LIB)
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -shared -o $(LIBPSEUDO) \
 		pseudo_client.o pseudo_ipc.o \
 		$(WRAPOBJS) $(SHOBJS) $(LDFLAGS) $(CLIENT_LDFLAGS)
@@ -168,7 +168,7 @@ offsets32:
 offsets64:
 	$(CC) -m64 -o offsets64 offsets.c
 
-$(PSEUDO_PROFILE): $(BIN) pseudo_profile
+$(PSEUDO_PROFILE): pseudo_profile | $(BIN)
 	cp pseudo_profile $(BIN)
 
 pseudo_profile: Makefile pseudo_profile.c tables wrappers

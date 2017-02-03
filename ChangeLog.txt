@@ -1,3 +1,6 @@
+2017-02-03:
+	* (gportay) contributed fix to Makefile (fix binaries rebuild).
+
 2017-02-01:
 	* (seebs) handle xattr deletion slightly more carefully.
 	* (seebs) tag this as 1.8.2
