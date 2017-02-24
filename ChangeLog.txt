@@ -1,3 +1,6 @@
+2017-02-24:
+	* (seebs) import posix_acl_default fix from Anton Gerasimov
+	  <anton@advancedtelematic.com>
 2017-02-03:
 	* (gportay) contributed fix to Makefile (fix binaries rebuild).
 
