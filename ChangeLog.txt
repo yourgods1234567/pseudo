@@ -1,3 +1,8 @@
+2017-04-13:
+	* (seebs) don't unset LD_PRELOAD or the like, because if you
+	  do that, bash can segfault because it "knows" how many
+	  fields are in environ.
+
 2017-02-24:
 	* (seebs) import posix_acl_default fix from Anton Gerasimov
 	  <anton@advancedtelematic.com>

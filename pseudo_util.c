@@ -844,7 +844,7 @@ void pseudo_dropenv() {
 		if (ld_preload && strlen(ld_preload)) {
 			SETENV(PRELINK_LIBRARIES, ld_preload, 1);
 		} else {
-			UNSETENV(PRELINK_LIBRARIES);
+			SETENV(PRELINK_LIBRARIES, "", 1);
 		}
 	}
 }
