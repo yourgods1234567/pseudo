@@ -792,6 +792,7 @@ pseudo_server_loop(void) {
 	struct sigaction eat_usr2 = {
 		.sa_handler = set_do_list_clients
 	};
+	int hitmaxfiles;
 
 	clients = malloc(16 * sizeof(*clients));
 
@@ -810,6 +811,7 @@ pseudo_server_loop(void) {
 	active_clients = 1;
 	max_clients = 16;
 	highest_client = 0;
+	hitmaxfiles = 0;
 
 	pseudo_debug(PDBGF_SERVER, "server loop started.\n");
 	if (listen_fd < 0) {
@@ -868,10 +870,15 @@ pseudo_server_loop(void) {
 					} else {
 						serve_client(i);
 					}
+				} else if (hitmaxfiles) {
+					/* Only close one per loop iteration in the interests of caution */
+					close_client(i);
+					hitmaxfiles = 0;
 				}
 				if (die_forcefully)
 					break;
 			}
+			hitmaxfiles = 0;
 			if (!die_forcefully && 
 			    (FD_ISSET(clients[0].fd, &events) ||
 			     FD_ISSET(clients[0].fd, &reads))) {
@@ -893,6 +900,9 @@ pseudo_server_loop(void) {
 					 */
 					pseudo_server_timeout = DEFAULT_PSEUDO_SERVER_TIMEOUT;
 					die_peacefully = 0;
+				} else if (errno == EMFILE) {
+					hitmaxfiles = 1;
+					pseudo_debug(PDBGF_SERVER, "Hit max open files, dropping a client.\n");
 				}
 			}
 			pseudo_debug(PDBGF_SERVER, "server loop complete [%d clients left]\n", active_clients);
