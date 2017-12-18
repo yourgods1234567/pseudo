@@ -1,3 +1,7 @@
+2017-12-18:
+	* (seebs) Add a list of clients as a handler for SIGUSR2. (Useful
+	  for debugging, maybe.)
+
 2017-04-13:
 	* (seebs) don't unset LD_PRELOAD or the like, because if you
 	  do that, bash can segfault because it "knows" how many

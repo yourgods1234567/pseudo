@@ -62,6 +62,7 @@ static int active_clients = 0, highest_client = 0, max_clients = 0;
 int pseudo_server_timeout = DEFAULT_PSEUDO_SERVER_TIMEOUT;
 static int die_peacefully = 0;
 static int die_forcefully = 0;
+static sig_atomic_t do_list_clients = 0;
 
 /* when the client is linked with pseudo_wrappers, these are defined there.
  * when it is linked with pseudo_server, though, we have to provide different
@@ -75,6 +76,11 @@ void
 quit_now(int signal) {
 	pseudo_diag("Received signal %d, quitting.\n", signal);
 	die_forcefully = 1;
+}
+
+static void
+set_do_list_clients(int sig) {
+	do_list_clients = sig;
 }
 
 static int messages = 0, responses = 0;
@@ -581,8 +587,13 @@ pseudo_server_loop(void) {
 	int rc;
 	int fd;
 	int loop_timeout = pseudo_server_timeout;
+	struct sigaction eat_usr2 = {
+		.sa_handler = set_do_list_clients
+	};
 
 	clients = malloc(16 * sizeof(*clients));
+
+	sigaction(SIGUSR2, &eat_usr2, NULL);
 
 	clients[0].fd = listen_fd;
 	clients[0].pid = getpid();
@@ -616,7 +627,12 @@ pseudo_server_loop(void) {
 	/* EINTR tends to come from profiling, so it is not a good reason to
 	 * exit; other signals are caught and set the flag causing a graceful
 	 * exit. */
+	sigset_t maskusr2;
+	sigemptyset(&maskusr2);
+	sigaddset(&maskusr2, SIGUSR2);
+	sigprocmask(SIG_BLOCK, &maskusr2, NULL);
 	while ((rc = select(max_fd + 1, &reads, &writes, &events, &timeout)) >= 0 || (errno == EINTR)) {
+		sigprocmask(SIG_UNBLOCK, &maskusr2, NULL);
 		if (rc == 0 || (rc == -1 && errno == EINTR)) {
 			/* If there's no clients, start timing out.  If there
 			 * are active clients, never time out.
@@ -692,6 +708,21 @@ pseudo_server_loop(void) {
 			}
 			pseudo_debug(PDBGF_SERVER, "server loop complete [%d clients left]\n", active_clients);
 		}
+		if (do_list_clients) {
+			do_list_clients = 0;
+			pseudo_diag("listing clients [1 through %d]:\n", highest_client);
+			for (i = 1; i <= highest_client; ++i) {
+				if (clients[i].fd == -1) {
+					pseudo_diag("client %4d: inactive.\n", i);
+					continue;
+				}
+				pseudo_diag("client %4d: fd %4d, pid %5d, state %s, program %s\n",
+					i, clients[i].fd, clients[i].pid,
+			        	FD_ISSET(clients[i].fd, &reads) ? "R" : "-",
+					clients[i].program ? clients[i].program : "<unspecified>");
+			}
+			pseudo_diag("done.\n");
+		}
 		if (die_peacefully || die_forcefully) {
 			pseudo_debug(PDBGF_SERVER, "quitting.\n");
 			pseudo_debug(PDBGF_SERVER | PDBGF_BENCHMARK, "server %d exiting: handled %d messages in %.4f seconds\n",
@@ -735,6 +766,7 @@ pseudo_server_loop(void) {
 		}
 		/* reinitialize timeout because Linux select alters it */
 		timeout = (struct timeval) { .tv_sec = LOOP_DELAY, .tv_usec = 0 };
+		sigprocmask(SIG_BLOCK, &maskusr2, NULL);
 	}
 	pseudo_diag("select failed: %s\n", strerror(errno));
 }
