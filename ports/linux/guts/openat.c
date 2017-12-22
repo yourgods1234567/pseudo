@@ -38,7 +38,16 @@
         );
 #endif
 
+#ifdef O_TMPFILE
+	/* don't handle O_CREAT the same way if O_TMPFILE exists
+	 * and is set.
+	 */
+	if (flags & O_TMPFILE) {
+		existed = 0;
+	} else
+#endif
 	/* if a creation has been requested, check whether file exists */
+	/* note "else" in #ifdef O_TMPFILE above */
 	if (flags & O_CREAT) {
 		save_errno = errno;
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
@@ -62,10 +71,21 @@
 #else
 	rc = real_openat(dirfd, path, flags, PSEUDO_FS_MODE(mode, 0));
 #endif
-	save_errno = errno;
 
 	if (rc != -1) {
+		save_errno = errno;
 		int stat_rc;
+#ifdef O_TMPFILE
+		/* in O_TMPFILE case, nothing gets put in the
+		 * database, because there's no directory entries for
+		 * the file yet.
+		 */
+		if (flags & O_TMPFILE) {
+			real_fchmod(rc, PSEUDO_FS_MODE(mode, 0));
+			errno = save_errno;
+			return rc;
+		}
+#endif
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
 		stat_rc = real___xstat64(_STAT_VER, path, &buf);
 #else
@@ -76,9 +96,10 @@
 			buf.st_mode = PSEUDO_DB_MODE(buf.st_mode, mode);
 			if (!existed) {
 				real_fchmod(rc, PSEUDO_FS_MODE(mode, 0));
+				// file has no path, but has been created
 				pseudo_client_op(OP_CREAT, 0, -1, dirfd, path, &buf);
 			}
-			pseudo_client_op(OP_OPEN, PSEUDO_ACCESS(flags), rc, dirfd, path, &buf);
+				pseudo_client_op(OP_OPEN, PSEUDO_ACCESS(flags), rc, dirfd, path, &buf);
 		} else {
 			pseudo_debug(PDBGF_FILE, "openat (fd %d, path %d/%s, flags %d) succeeded, but stat failed (%s).\n",
 				rc, dirfd, path, flags, strerror(errno));
