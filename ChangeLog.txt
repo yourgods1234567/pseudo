@@ -8,6 +8,7 @@
 	* (seebs) merge epoll support from <alexander.kanavin@linux.intel.com>
 	* (seebs) add wrapper for statvfs (based on patch from
 	  <dan.dedrick@gmail.com>)
+	* (seebs) Call this 1.9.0.
 
 2017-12-22:
 	* (seebs) handle the pathological case of LINKAT with
