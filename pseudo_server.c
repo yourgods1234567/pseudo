@@ -25,6 +25,7 @@
 
 #include <unistd.h>
 #include <fcntl.h>
+#include <sys/ioctl.h>
 #include <sys/select.h>
 #include <sys/time.h>
 #include <sys/types.h>
@@ -472,7 +473,10 @@ static int
 serve_client(int i) {
 	pseudo_msg_t *in;
 	int rc;
+	struct timeval tv1, tv2;
+	gettimeofday(&tv1, NULL);
 
+	++messages;
 	pseudo_debug(PDBGF_SERVER, "message from client %d [%d:%s - %s] fd %d\n",
 		i, (int) clients[i].pid,
 		clients[i].program ? clients[i].program : "???",
@@ -509,6 +513,11 @@ serve_client(int i) {
 			}
 			pseudo_debug(PDBGF_SERVER, "\n");
 		}
+		if (in->type == PSEUDO_MSG_SHUTDOWN && !clients[i].pid) {
+			pseudo_debug(PDBGF_SERVER, "shutdown request from client %d [pid %d]\n",
+				i, in->client);
+			in->client = clients[i].pid;
+		}
 		/* sanity-check client ID */
 		if (in->client != clients[i].pid) {
 			pseudo_debug(PDBGF_SERVER, "uh-oh, expected pid %d for client %d, got %d\n",
@@ -518,8 +527,6 @@ serve_client(int i) {
 		 * pseudo_server_response.
 		 */
 		if (in->type != PSEUDO_MSG_SHUTDOWN) {
-			if (in->type == PSEUDO_MSG_FASTOP)
-				send_response = 0;
 			/* most messages don't need these, but xattr may */
 			response_path = 0;
 			response_pathlen = -1;
@@ -535,6 +542,20 @@ serve_client(int i) {
 				in->pathlen = response_pathlen;
 			} else {
 				in->pathlen = 0;
+			}
+			if (in->type == PSEUDO_MSG_FASTOP) {
+				/* respond instantly */
+				send_response = 0;
+				int t_type = in->type;
+				int t_pathlen = in->pathlen;
+				in->type = PSEUDO_MSG_ACK;
+				in->pathlen = 0;
+				if ((rc = pseudo_msg_send(clients[i].fd, in, in->pathlen, response_path)) != 0) {
+					pseudo_debug(PDBGF_SERVER, "failed to send response to client %d [%d]: %d (%s)\n",
+						i, (int) clients[i].pid, rc, strerror(errno));
+				}
+				in->type = t_type;
+				in->pathlen = t_pathlen;
 			}
 		} else {
 			/* the server's listen fd is "a client", and
@@ -575,15 +596,28 @@ serve_client(int i) {
 			rc = 1;
 		}
 		free(response_path);
-		return rc;
 	} else {
 		/* this should not be happening, but the exceptions aren't
 		 * being detected in select() for some reason.
 		 */
 		pseudo_debug(PDBGF_SERVER, "client %d: no message\n", (int) clients[i].pid);
 		close_client(i);
-		return 0;
+		rc = 0;
 	}
+
+	gettimeofday(&tv2, NULL);
+	if (rc == 0)
+		++responses;
+	message_time.tv_sec += (tv2.tv_sec - tv1.tv_sec);
+	message_time.tv_usec += (tv2.tv_usec - tv1.tv_usec);
+	if (message_time.tv_usec < 0) {
+		message_time.tv_usec += 1000000;
+		--message_time.tv_sec;
+	} else while (message_time.tv_usec > 1000000) {
+		message_time.tv_usec -= 1000000;
+		++message_time.tv_sec;
+	}
+	return rc;
 }
 
 #ifdef PSEUDO_EPOLL
@@ -698,22 +732,12 @@ static void pseudo_server_loop_epoll(void)
 						}
 					}
 				} else {
-					struct timeval tv1, tv2;
-					int rc;
-					gettimeofday(&tv1, NULL);
-					rc = serve_client(events[i].data.u64);
-					gettimeofday(&tv2, NULL);
-					++messages;
-					if (rc == 0)
-						++responses;
-					message_time.tv_sec += (tv2.tv_sec - tv1.tv_sec);
-					message_time.tv_usec += (tv2.tv_usec - tv1.tv_usec);
-					if (message_time.tv_usec < 0) {
-						message_time.tv_usec += 1000000;
-						--message_time.tv_sec;
-					} else while (message_time.tv_usec > 1000000) {
-						message_time.tv_usec -= 1000000;
-						++message_time.tv_sec;
+					int n = 0;
+					ioctl(clients[i].fd, FIONREAD, &n);
+					if (n == 0) {
+						close_client(i);
+					} else {
+						serve_client(i);
 					}
 				}
 				if (die_forcefully)
@@ -805,8 +829,8 @@ pseudo_server_loop(void) {
 	pdb_log_msg(SEVERITY_INFO, NULL, NULL, NULL, "server started (pid %d)", getpid());
 
 	FD_ZERO(&reads);
-	FD_ZERO(&writes);
 	FD_ZERO(&events);
+	FD_ZERO(&writes);
 	FD_SET(clients[0].fd, &reads);
 	FD_SET(clients[0].fd, &events);
 	max_fd = clients[0].fd;
@@ -844,28 +868,15 @@ pseudo_server_loop(void) {
 		} else if (rc > 0) {
 			loop_timeout = pseudo_server_timeout;
 			for (i = 1; i <= highest_client; ++i) {
-				if (clients[i].fd == -1)
+				if (clients[i].fd == -1) {
 					continue;
-				if (FD_ISSET(clients[i].fd, &events)) {
-					/* this should happen but doesn't... */
-					close_client(i);
 				} else if (FD_ISSET(clients[i].fd, &reads)) {
-					struct timeval tv1, tv2;
-					int rc;
-					gettimeofday(&tv1, NULL);
-					rc = serve_client(i);
-					gettimeofday(&tv2, NULL);
-					++messages;
-					if (rc == 0)
-						++responses;
-					message_time.tv_sec += (tv2.tv_sec - tv1.tv_sec);
-					message_time.tv_usec += (tv2.tv_usec - tv1.tv_usec);
-					if (message_time.tv_usec < 0) {
-						message_time.tv_usec += 1000000;
-						--message_time.tv_sec;
-					} else while (message_time.tv_usec > 1000000) {
-						message_time.tv_usec -= 1000000;
-						++message_time.tv_sec;
+					int n = 0;
+					ioctl(clients[i].fd, FIONREAD, &n);
+					if (n == 0) {
+						close_client(i);
+					} else {
+						serve_client(i);
 					}
 				}
 				if (die_forcefully)
@@ -943,7 +954,6 @@ pseudo_server_loop(void) {
 			if (clients[i].fd != -1) {
 				++current_clients;
 				FD_SET(clients[i].fd, &reads);
-				FD_SET(clients[i].fd, &events);
 				if (clients[i].fd > max_fd)
 					max_fd = clients[i].fd;
 			}

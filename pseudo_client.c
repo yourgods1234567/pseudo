@@ -1331,21 +1331,17 @@ pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 		 * indicating a successful send.
 		 */
 		pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "sent!\n");
-		if (msg->type != PSEUDO_MSG_FASTOP) {
-			response = pseudo_msg_receive(connect_fd);
-			if (!response) {
-				pseudo_debug(PDBGF_CLIENT, "expected response did not occur; retrying\n");
-			} else {
-				if (response->type != PSEUDO_MSG_ACK) {
-					pseudo_debug(PDBGF_CLIENT, "got non-ack response %d\n", response->type);
-					return 0;
-				} else {
-					pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "got response type %d\n", response->type);
-					return response;
-				}
-			}
+		response = pseudo_msg_receive(connect_fd);
+		if (!response) {
+			pseudo_debug(PDBGF_CLIENT, "expected response did not occur; retrying\n");
 		} else {
-			return 0;
+			if (response->type != PSEUDO_MSG_ACK) {
+				pseudo_debug(PDBGF_CLIENT, "got non-ack response %d\n", response->type);
+				return 0;
+			} else {
+				pseudo_debug(PDBGF_CLIENT | PDBGF_VERBOSE, "got response type %d\n", response->type);
+				return response;
+			}
 		}
 	}
 	pseudo_diag("pseudo: server connection persistently failed, aborting.\n");
