@@ -3,6 +3,8 @@
 	  it's actually probably right.
 	* (<zboszor@pr.hu>) handle extremely long group names
 	  in getgrnam and similar functions.
+	* (seebs) drop the diagnostic for a missing "real" function
+	  as it turns out to be counterproductive at best.
 
 2017-12-22:
 	* (seebs) handle the pathological case of LINKAT with

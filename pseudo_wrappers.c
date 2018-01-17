@@ -131,7 +131,6 @@ static void
 pseudo_init_one_wrapper(pseudo_function *func) {
 	int (*f)(void) = (int (*)(void)) NULL;
 
-	char *e;
 	if (*func->real != NULL) {
 		/* already initialized */
 		return;
@@ -147,22 +146,11 @@ pseudo_init_one_wrapper(pseudo_function *func) {
 	f = dlsym(RTLD_NEXT, func->name);
 	if (f) {
 		*func->real = f;
-	} else {
-#ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
-		char *s = func->name;
-		s += strlen(s) - 2;
-		/* *at() don't have to exist */
-		if (!strcmp(s, "at")) {
-			return;
-		}
-#endif
-		e = dlerror();
-		if (e != NULL) {
-			pseudo_diag("No real function for %s: %s\n", func->name, e);
-		} else {
-			pseudo_diag("No real function for %s, but dlerror NULL.\n", func->name);
-		}
 	}
+	/* it turns out that in some cases, we get apparently-harmless
+	 * errors if a function is missing, and that printing output
+	 * for these seems unhelpful. so we no longer do that.
+	 */
 }
 
 void
