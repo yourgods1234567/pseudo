@@ -25,6 +25,7 @@ opt_arch=x86
 opt_bits=
 opt_sqlite=/usr
 opt_rpath=
+opt_epoll=
 opt_memory=
 opt_async=
 opt_xattr=
@@ -43,6 +44,7 @@ usage()
     echo >&2 "           [--libdir=...]"
     echo >&2 "           [--suffix=...]"
     echo >&2 "           [--enable-memory-db]"
+    echo >&2 "           [--enable-epoll]"
     echo >&2 "           [--enable-xattr]"
     echo >&2 "           [--enable-xattrdb]"
     echo >&2 "           [--enable-profiling]"
@@ -115,6 +117,12 @@ do
         ;;
     --enable-profiling=yes | --enable-profiling)
         opt_profiling=true
+	;;
+    --enable-epoll=no)
+        opt_epoll=false
+        ;;
+    --enable-epoll=yes | --enable-epoll)
+        opt_epoll=true
 	;;
     --enable-xattr=no)
         opt_xattr=false
@@ -255,6 +263,10 @@ if [ -z "$opt_async" ]; then
     opt_async=false
 fi
 
+if [ -z "$opt_epoll" ]; then
+    opt_epoll=false
+fi
+
 if $opt_async; then
     FORCE_ASYNC="-DPSEUDO_FORCE_ASYNC"
 else
@@ -281,6 +293,12 @@ if [ -z "$opt_xattr" ]; then
 	    echo "getfattr fails, disabling extended attribute support"
         fi
     fi
+fi
+
+if $opt_epoll; then
+    EPOLL="-DPSEUDO_EPOLL"
+else
+    EPOLL=""
 fi
 
 if $opt_xattr || $opt_xattrdb; then
@@ -322,6 +340,7 @@ touch func_deps.mk
 
 sed -e '
   s,@PREFIX@,'"$opt_prefix"',g
+  s,@EPOLL@,'"$EPOLL"',g
   s,@XATTR@,'"$opt_xattr"',g
   s,@XATTRDB@,'"$opt_xattrdb"',g
   s,@PROFILING@,'"$opt_profiling"',g

@@ -32,6 +32,9 @@
 #include <sys/un.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#ifdef PSEUDO_EPOLL
+#include <sys/epoll.h>
+#endif
 #include <signal.h>
 
 #include "pseudo.h"
@@ -59,6 +62,7 @@ static int active_clients = 0, highest_client = 0, max_clients = 0;
 
 #define LOOP_DELAY 2
 #define DEFAULT_PSEUDO_SERVER_TIMEOUT 30
+#define EPOLL_MAX_EVENTS 10
 int pseudo_server_timeout = DEFAULT_PSEUDO_SERVER_TIMEOUT;
 static int die_peacefully = 0;
 static int die_forcefully = 0;
@@ -86,7 +90,11 @@ set_do_list_clients(int sig) {
 static int messages = 0, responses = 0;
 static struct timeval message_time = { .tv_sec = 0 };
 
+#ifdef PSEUDO_EPOLL
+static void pseudo_server_loop_epoll(void);
+#else
 static void pseudo_server_loop(void);
+#endif
 
 /* helper function to make a directory, just like mkdir -p.
  * Can't use system() because the child shell would end up trying
@@ -375,12 +383,16 @@ pseudo_server_start(int daemonize) {
 			kill(ppid, SIGUSR1);
 		}
 	}
+#ifdef PSEUDO_EPOLL
+	pseudo_server_loop_epoll();
+#else
 	pseudo_server_loop();
+#endif
 	return 0;
 }
 
 /* mess with internal tables as needed */
-static void
+static unsigned int
 open_client(int fd) {
 	pseudo_client_t *new_clients;
 	int i;
@@ -396,7 +408,7 @@ open_client(int fd) {
 			++active_clients;
 			if (i > highest_client)
 				highest_client = i;
-			return;
+			return i;
 		}
 	}
 
@@ -420,9 +432,11 @@ open_client(int fd) {
 
 		max_clients += 16;
 		++active_clients;
+		return max_clients - 16;
 	} else {
 		pseudo_diag("error allocating new client, fd %d\n", fd);
 		close(fd);
+		return 0;
 	}
 }
 
@@ -468,7 +482,7 @@ serve_client(int i) {
 	if (in) {
 		char *response_path = 0;
 		size_t response_pathlen;
-                int send_response = 1;
+		int send_response = 1;
 		pseudo_debug(PDBGF_SERVER | PDBGF_VERBOSE, "got a message (%d): %s\n", in->type, (in->pathlen ? in->path : "<no path>"));
 		/* handle incoming ping */
 		if (in->type == PSEUDO_MSG_PING && !clients[i].pid) {
@@ -504,8 +518,8 @@ serve_client(int i) {
 		 * pseudo_server_response.
 		 */
 		if (in->type != PSEUDO_MSG_SHUTDOWN) {
-                        if (in->type == PSEUDO_MSG_FASTOP)
-                                send_response = 0;
+			if (in->type == PSEUDO_MSG_FASTOP)
+				send_response = 0;
 			/* most messages don't need these, but xattr may */
 			response_path = 0;
 			response_pathlen = -1;
@@ -552,14 +566,14 @@ serve_client(int i) {
 				die_peacefully = 1;
 			}
 		}
-                if (send_response) {
-                        if ((rc = pseudo_msg_send(clients[i].fd, in, in->pathlen, response_path)) != 0) {
-                                pseudo_debug(PDBGF_SERVER, "failed to send response to client %d [%d]: %d (%s)\n",
-                                        i, (int) clients[i].pid, rc, strerror(errno));
-                        }
-                } else {
-                        rc = 1;
-                }
+		if (send_response) {
+			if ((rc = pseudo_msg_send(clients[i].fd, in, in->pathlen, response_path)) != 0) {
+				pseudo_debug(PDBGF_SERVER, "failed to send response to client %d [%d]: %d (%s)\n",
+					i, (int) clients[i].pid, rc, strerror(errno));
+			}
+		} else {
+			rc = 1;
+		}
 		free(response_path);
 		return rc;
 	} else {
@@ -571,6 +585,180 @@ serve_client(int i) {
 		return 0;
 	}
 }
+
+#ifdef PSEUDO_EPOLL
+static void pseudo_server_loop_epoll(void)
+{
+	struct sockaddr_un client;
+	socklen_t len;
+	int i;
+	int rc;
+	int fd;
+	int timeout;
+	struct epoll_event ev, events[EPOLL_MAX_EVENTS];
+	int loop_timeout = pseudo_server_timeout;
+	struct sigaction eat_usr2 = {
+		.sa_handler = set_do_list_clients
+	};
+
+	clients = malloc(16 * sizeof(*clients));
+
+	sigaction(SIGUSR2, &eat_usr2, NULL);
+
+	clients[0].fd = listen_fd;
+	clients[0].pid = getpid();
+
+	for (i = 1; i < 16; ++i) {
+		clients[i].fd = -1;
+		clients[i].pid = 0;
+		clients[i].tag = NULL;
+		clients[i].program = NULL;
+	}
+
+	active_clients = 1;
+	max_clients = 16;
+	highest_client = 0;
+
+	pseudo_debug(PDBGF_SERVER, "server loop started.\n");
+	if (listen_fd < 0) {
+		pseudo_diag("got into loop with no valid listen fd.\n");
+		exit(PSEUDO_EXIT_LISTEN_FD);
+	}
+
+	timeout = LOOP_DELAY * 1000;
+
+	int epollfd = epoll_create1(0);
+	if (epollfd == -1) {
+		pseudo_diag("epoll_create1() failed.\n");
+		exit(PSEUDO_EXIT_EPOLL_CREATE);
+	}
+	ev.events = EPOLLIN;
+	ev.data.u64 = 0;
+	if (epoll_ctl(epollfd, EPOLL_CTL_ADD, clients[0].fd, &ev) == -1) {
+		pseudo_diag("epoll_ctl() failed with listening socket.\n");
+		exit(PSEUDO_EXIT_EPOLL_CTL);
+	}
+
+	pdb_log_msg(SEVERITY_INFO, NULL, NULL, NULL, "server started (pid %d)", getpid());
+
+	for (;;) {
+		rc = epoll_wait(epollfd, events, EPOLL_MAX_EVENTS, timeout);
+		if (rc == 0 || (rc == -1 && errno == EINTR)) {
+			/* If there's no clients, start timing out.  If there
+			 * are active clients, never time out.
+			 */
+			if (active_clients == 1) {
+				loop_timeout -= LOOP_DELAY;
+				/* maybe flush database to disk */
+				pdb_maybe_backup();
+				if (loop_timeout <= 0) {
+					pseudo_debug(PDBGF_SERVER, "no more clients, got bored.\n");
+					die_peacefully = 1;
+				} else {
+					/* display this if not exiting */
+					pseudo_debug(PDBGF_SERVER | PDBGF_BENCHMARK, "%d messages handled in %.4f seconds, %d responses\n",
+						messages,
+						(double) message_time.tv_sec +
+						(double) message_time.tv_usec / 1000000.0,
+						responses);
+				}
+			}
+		} else if (rc > 0) {
+			loop_timeout = pseudo_server_timeout;
+			for (i = 0; i < rc; ++i) {
+				if (clients[events[i].data.u64].fd == listen_fd) {
+					if (!die_forcefully) {
+						len = sizeof(client);
+						if ((fd = accept(listen_fd, (struct sockaddr *) &client, &len)) != -1) {
+						/* Don't allow clients to end up on fd 2, because glibc's
+						 * malloc debug uses that fd unconditionally.
+						 */
+							if (fd == 2) {
+								int newfd = fcntl(fd, F_DUPFD, 3);
+								close(fd);
+								fd = newfd;
+							}
+							pseudo_debug(PDBGF_SERVER, "new client fd %d\n", fd);
+							/* A new client implicitly cancels any
+							 * previous shutdown request, or a
+							 * shutdown for lack of clients.
+							 */
+							pseudo_server_timeout = DEFAULT_PSEUDO_SERVER_TIMEOUT;
+							die_peacefully = 0;
+
+							ev.events = EPOLLIN;
+							ev.data.u64 = open_client(fd);
+							if (ev.data.u64 != 0 && epoll_ctl(epollfd, EPOLL_CTL_ADD, clients[ev.data.u64].fd, &ev) == -1) {
+								pseudo_diag("epoll_ctl() failed with accepted socket.\n");
+								exit(PSEUDO_EXIT_EPOLL_CTL);
+							}
+						} else if (errno == EMFILE) {
+							// select() loop would drop a client here, we do nothing (for now)
+							pseudo_debug(PDBGF_SERVER, "Hit max open files.\n");
+						}
+					}
+				} else {
+					struct timeval tv1, tv2;
+					int rc;
+					gettimeofday(&tv1, NULL);
+					rc = serve_client(events[i].data.u64);
+					gettimeofday(&tv2, NULL);
+					++messages;
+					if (rc == 0)
+						++responses;
+					message_time.tv_sec += (tv2.tv_sec - tv1.tv_sec);
+					message_time.tv_usec += (tv2.tv_usec - tv1.tv_usec);
+					if (message_time.tv_usec < 0) {
+						message_time.tv_usec += 1000000;
+						--message_time.tv_sec;
+					} else while (message_time.tv_usec > 1000000) {
+						message_time.tv_usec -= 1000000;
+						++message_time.tv_sec;
+					}
+				}
+				if (die_forcefully)
+					break;
+			}
+			pseudo_debug(PDBGF_SERVER, "server loop complete [%d clients left]\n", active_clients);
+		} else {
+			pseudo_diag("epoll_wait failed: %s\n", strerror(errno));
+			break;
+		}
+		if (do_list_clients) {
+			do_list_clients = 0;
+			pseudo_diag("listing clients [1 through %d]:\n", highest_client);
+			for (i = 1; i <= highest_client; ++i) {
+				if (clients[i].fd == -1) {
+					pseudo_diag("client %4d: inactive.\n", i);
+					continue;
+				}
+				pseudo_diag("client %4d: fd %4d, pid %5d, program %s\n",
+					i, clients[i].fd, clients[i].pid,
+					clients[i].program ? clients[i].program : "<unspecified>");
+			}
+			pseudo_diag("done.\n");
+		}
+		if (die_peacefully || die_forcefully) {
+			pseudo_debug(PDBGF_SERVER, "quitting.\n");
+			pseudo_debug(PDBGF_SERVER | PDBGF_BENCHMARK, "server %d exiting: handled %d messages in %.4f seconds\n",
+				getpid(), messages,
+				(double) message_time.tv_sec +
+				(double) message_time.tv_usec / 1000000.0);
+			pdb_log_msg(SEVERITY_INFO, NULL, NULL, NULL, "server %d exiting: handled %d messages in %.4f seconds",
+				getpid(), messages,
+				(double) message_time.tv_sec +
+				(double) message_time.tv_usec / 1000000.0);
+			/* and at this point, we'll start refusing connections */
+			close(clients[0].fd);
+			/* This is a good place to insert a delay for
+			 * debugging race conditions during startup. */
+			/* usleep(300000); */
+			exit(0);
+		}
+	}
+
+}
+#else
 
 /* get clients, handle messages, shut down.
  * This doesn't actually do any work, it just calls a ton of things which
@@ -639,8 +827,8 @@ pseudo_server_loop(void) {
 			 */
 			if (active_clients == 1) {
 				loop_timeout -= LOOP_DELAY;
-                                /* maybe flush database to disk */
-                                pdb_maybe_backup();
+				/* maybe flush database to disk */
+				pdb_maybe_backup();
 				if (loop_timeout <= 0) {
 					pseudo_debug(PDBGF_SERVER, "no more clients, got bored.\n");
 					die_peacefully = 1;
@@ -650,7 +838,7 @@ pseudo_server_loop(void) {
 						messages,
 						(double) message_time.tv_sec +
 						(double) message_time.tv_usec / 1000000.0,
-                                                responses);
+						responses);
 				}
 			}
 		} else if (rc > 0) {
@@ -663,13 +851,13 @@ pseudo_server_loop(void) {
 					close_client(i);
 				} else if (FD_ISSET(clients[i].fd, &reads)) {
 					struct timeval tv1, tv2;
-                                        int rc;
+					int rc;
 					gettimeofday(&tv1, NULL);
 					rc = serve_client(i);
 					gettimeofday(&tv2, NULL);
 					++messages;
-                                        if (rc == 0)
-                                                ++responses;
+					if (rc == 0)
+						++responses;
 					message_time.tv_sec += (tv2.tv_sec - tv1.tv_sec);
 					message_time.tv_usec += (tv2.tv_usec - tv1.tv_usec);
 					if (message_time.tv_usec < 0) {
@@ -698,12 +886,12 @@ pseudo_server_loop(void) {
 					}
 					pseudo_debug(PDBGF_SERVER, "new client fd %d\n", fd);
 					open_client(fd);
-                                        /* A new client implicitly cancels any
-                                         * previous shutdown request, or a
-                                         * shutdown for lack of clients.
-                                         */
-                                        pseudo_server_timeout = DEFAULT_PSEUDO_SERVER_TIMEOUT;
-                                        die_peacefully = 0;
+					/* A new client implicitly cancels any
+					 * previous shutdown request, or a
+					 * shutdown for lack of clients.
+					 */
+					pseudo_server_timeout = DEFAULT_PSEUDO_SERVER_TIMEOUT;
+					die_peacefully = 0;
 				}
 			}
 			pseudo_debug(PDBGF_SERVER, "server loop complete [%d clients left]\n", active_clients);
@@ -718,7 +906,7 @@ pseudo_server_loop(void) {
 				}
 				pseudo_diag("client %4d: fd %4d, pid %5d, state %s, program %s\n",
 					i, clients[i].fd, clients[i].pid,
-			        	FD_ISSET(clients[i].fd, &reads) ? "R" : "-",
+					FD_ISSET(clients[i].fd, &reads) ? "R" : "-",
 					clients[i].program ? clients[i].program : "<unspecified>");
 			}
 			pseudo_diag("done.\n");
@@ -770,3 +958,4 @@ pseudo_server_loop(void) {
 	}
 	pseudo_diag("select failed: %s\n", strerror(errno));
 }
+#endif /* this is the else of #ifdef PSEUDO_EPOLL */
