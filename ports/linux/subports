@@ -41,3 +41,16 @@ else
 	echo "linux/noxattr"
 fi
 rm -f dummy.c dummy.o
+
+cat > dummy.c <<EOF
+#include <sys/statvfs.h>
+int i;
+EOF
+if ! ${CC} -c -o dummy.o dummy.c >/dev/null 2>&1; then
+	echo >&2 "Warning: Can't compile trivial program using <sys/statvfs.h>".
+	echo >&2 "         xattr support will require that header."
+else
+	echo "linux/statvfs"
+fi
+rm -f dummy.c dummy.o
+

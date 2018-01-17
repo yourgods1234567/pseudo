@@ -37,6 +37,9 @@
 #include <sys/wait.h>
 #include <dlfcn.h>
 
+/* include this to get PSEUDO_PORT_* definitions */
+#include "pseudo.h"
+
 /* used for various specific function arguments */
 #include <dirent.h>
 #include <fts.h>
@@ -45,11 +48,14 @@
 #include <grp.h>
 #include <pwd.h>
 #include <utime.h>
+#ifdef PSEUDO_PORT_LINUX_STATVFS
+#include <sys/statvfs.h>
+#endif
 
-#include "pseudo.h"
 #include "pseudo_wrapfuncs.h"
 #include "pseudo_ipc.h"
 #include "pseudo_client.h"
+
 
 /* Types and declarations we need in advance. */
 #include "pseudo_wrapper_table.c"
