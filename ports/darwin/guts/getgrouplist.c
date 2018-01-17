@@ -9,23 +9,47 @@
 
 	int found = 0;
 	int found_group = 0;
-	char buf[PSEUDO_PWD_MAX];
-	struct group grp, *gbuf = &grp;
+	size_t buflen = PSEUDO_PWD_MAX;
+	char *buf = NULL;
+	struct group grp;
 
-	setgrent();
-	while ((rc = wrap_getgrent_r(gbuf, buf, PSEUDO_PWD_MAX, &gbuf)) == 0) {
-		int i = 0;
-		for (i = 0; gbuf->gr_mem[i]; ++i) {
-			if (!strcmp(gbuf->gr_mem[i], name)) {
-				if (found < *ngroups)
-					groups[found] = gbuf->gr_gid;
-				++found;
-				if ((int) gbuf->gr_gid == basegid)
-					found_group = 1;
+	rc = ERANGE;
+
+	do {
+		struct group *gbuf = &grp;
+		char *new_buf = buf;
+
+		if (rc == ERANGE)
+			new_buf = realloc(buf, buflen);
+
+		if (!new_buf) {
+			rc = ENOMEM;
+			break;
+		}
+
+		buf = new_buf;
+
+		found = 0;
+		found_group = 0;
+		setgrent();
+		while ((rc = wrap_getgrent_r(gbuf, buf, buflen, &gbuf)) == 0) {
+			int i = 0;
+			for (i = 0; gbuf->gr_mem[i]; ++i) {
+				if (!strcmp(gbuf->gr_mem[i], name)) {
+					if (found < *ngroups)
+						groups[found] = gbuf->gr_gid;
+					++found;
+					if ((int) gbuf->gr_gid == basegid)
+						found_group = 1;
+				}
 			}
 		}
-	}
-	endgrent();
+		endgrent();
+
+		if (rc == ERANGE)
+			buflen = buflen << 1;
+	} while (rc == ERANGE);
+	free(buf);
 	if (!found_group) {
 		if (found < *ngroups)
 			groups[found] = basegid;
