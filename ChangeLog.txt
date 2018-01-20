@@ -1,3 +1,7 @@
+2018-01-20:
+	* (seebs) merge patch from <joshua.g.lock@linux.intel.com> to fix
+	  open/openat flags.
+
 2018-01-16:
 	* (seebs) rework the LINKAT case significantly but now
 	  it's actually probably right.

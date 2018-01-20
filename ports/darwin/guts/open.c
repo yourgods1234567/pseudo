@@ -12,7 +12,7 @@
 
 	/* mask out mode bits appropriately */
 	mode = mode & ~pseudo_umask;
-#ifdef PSEUDO_FORCE_ASYNCH
+#ifdef PSEUDO_FORCE_ASYNC
         flags &= ~O_SYNC;
 #endif
 

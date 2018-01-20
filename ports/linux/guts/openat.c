@@ -20,7 +20,7 @@
 	}
 #endif
 
-#ifdef PSEUDO_FORCE_ASYNCH
+#ifdef PSEUDO_FORCE_ASYNC
         /* Yes, I'm aware that every Linux system I've seen has
          * DSYNC and RSYNC being the same value as SYNC.
          */
