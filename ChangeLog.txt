@@ -1,3 +1,8 @@
+2018-02-15:
+	* (seebs) O_TMPFILE is actually some other flag AND O_DIRECTORYy,
+	  so a test for (flags & O_TMPFILE) does not actually test that
+	  O_TMPFILE is set.
+
 2018-01-20:
 	* (seebs) merge patch from <joshua.g.lock@linux.intel.com> to fix
 	  open/openat flags.

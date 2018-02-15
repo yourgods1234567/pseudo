@@ -42,7 +42,7 @@
 	/* don't handle O_CREAT the same way if O_TMPFILE exists
 	 * and is set.
 	 */
-	if (flags & O_TMPFILE) {
+	if ((flags & O_TMPFILE) == O_TMPFILE) {
 		existed = 0;
 	} else
 #endif
@@ -80,7 +80,7 @@
 		 * database, because there's no directory entries for
 		 * the file yet.
 		 */
-		if (flags & O_TMPFILE) {
+		if ((flags & O_TMPFILE) == O_TMPFILE) {
 			real_fchmod(rc, PSEUDO_FS_MODE(mode, 0));
 			errno = save_errno;
 			return rc;
