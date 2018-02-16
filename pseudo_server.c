@@ -449,7 +449,7 @@ close_client(int client) {
 	pseudo_debug(PDBGF_SERVER, "lost client %d [%d], closing fd %d\n", client,
 		clients[client].pid, clients[client].fd);
 	/* client went away... */
-	if (client > highest_client || client <= 0) {
+	if (client > highest_client || client < 0) {
 		pseudo_diag("tried to close client %d (highest is %d)\n",
 			client, highest_client);
 		return;
