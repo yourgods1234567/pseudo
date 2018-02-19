@@ -449,7 +449,7 @@ close_client(int client) {
 	pseudo_debug(PDBGF_SERVER, "lost client %d [%d], closing fd %d\n", client,
 		clients[client].pid, clients[client].fd);
 	/* client went away... */
-	if (client > highest_client || client < 0) {
+	if (client > highest_client || client <= 0) {
 		pseudo_diag("tried to close client %d (highest is %d)\n",
 			client, highest_client);
 		return;
@@ -700,7 +700,8 @@ static void pseudo_server_loop_epoll(void)
 		} else if (rc > 0) {
 			loop_timeout = pseudo_server_timeout;
 			for (i = 0; i < rc; ++i) {
-				if (clients[events[i].data.u64].fd == listen_fd) {
+				int client_id = events[i].data.u64;
+				if (clients[client_id].fd == listen_fd) {
 					if (!die_forcefully) {
 						len = sizeof(client);
 						if ((fd = accept(listen_fd, (struct sockaddr *) &client, &len)) != -1) {
@@ -733,11 +734,11 @@ static void pseudo_server_loop_epoll(void)
 					}
 				} else {
 					int n = 0;
-					ioctl(clients[i].fd, FIONREAD, &n);
+					ioctl(clients[client_id].fd, FIONREAD, &n);
 					if (n == 0) {
-						close_client(i);
+						close_client(client_id);
 					} else {
-						serve_client(i);
+						serve_client(client_id);
 					}
 				}
 				if (die_forcefully)
