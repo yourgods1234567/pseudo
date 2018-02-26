@@ -1,3 +1,8 @@
+2018-02-26:
+	* (seebs) implement mkstemps, mkostemp, and mkostemps. Actually,
+	  move implementation all to mkostemps, then implement the others
+	  in terms of it.
+
 2018-02-19:
 	* (seebs) fix using index of request rather than request's value
 
