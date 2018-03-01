@@ -1,3 +1,9 @@
+2018-03-01:
+	* (seebs) If you get a CREAT for an existing file, and it matches
+	  both path and inode, don't delete the entry because the inode
+	  matched and then not create it because the path used to match
+	  before you delete it.
+
 2018-02-26:
 	* (seebs) implement mkstemps, mkostemp, and mkostemps. Actually,
 	  move implementation all to mkostemps, then implement the others

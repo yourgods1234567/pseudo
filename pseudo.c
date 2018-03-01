@@ -444,7 +444,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 	char *path_by_ino = 0;
 	char *oldpath = 0;
 	size_t oldpathlen = 0;
-	int found_path = 0, found_ino = 0;
+	int found_path = 0, found_ino = 0, found_exact = 0;
 	int prefer_ino = 0;
 	int xattr_flags = 0;
 	int trailing_slash = 0;
@@ -543,6 +543,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			*msg = msg_header;
 			found_path = 1;
 			found_ino = 1;
+			found_exact = 1;
 			/* note:  we have to avoid freeing this later */
 			path_by_ino = msg->path;
 			if (msg->op == OP_LINK) {
@@ -768,9 +769,11 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		break;
 	case OP_CREAT:
 		/* implies a new file -- not a link, which would be OP_LINK */
-		if (found_ino) {
+		if (found_ino && !found_exact) {
 			/* CREAT should never be sent if the file existed.
 			 * So, any existing entry is an error.  Nuke it.
+			 * ... But only if it wasn't a match on both inode *and*
+			 * path, because if it were, that would be harmless.
 			 */
 			pseudo_diag("creat for '%s' replaces existing %llu ['%s'].\n",
 				msg->pathlen ? msg->path : "no path",
