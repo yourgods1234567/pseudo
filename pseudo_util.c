@@ -265,7 +265,7 @@ int pseudo_util_evlog_fd = 2;
 static int debugged_newline = 1;
 static char pid_text[32];
 static size_t pid_len;
-static int pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurrent, const char *element, size_t elen, int leave_this);
+static int pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurrent, const char *element, size_t elen, PSEUDO_STATBUF *buf, int leave_this);
 static int pseudo_append_elements(char *newpath, char *root, size_t allocated, char **current, const char *elements, size_t elen, int leave_last);
 extern char **environ;
 static ssize_t pseudo_max_pathlen = -1;
@@ -618,11 +618,11 @@ pseudo_new_pid() {
  * the symlink, appending each element in turn the same way.
  */
 static int
-pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurrent, const char *element, size_t elen, int leave_this) {
+pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurrent, const char *element, size_t elen, PSEUDO_STATBUF *buf, int leave_this) {
 	static int link_recursion = 0;
 	size_t curlen;
+	int is_reg = S_ISREG(buf->st_mode);
 	char *current;
-	PSEUDO_STATBUF buf;
 	if (!newpath ||
 	    !pcurrent || !*pcurrent ||
 	    !root || !element) {
@@ -630,25 +630,31 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 		return -1;
 	}
 	current = *pcurrent;
-	/* sanity-check:  ignore // or /./ */
-	if (elen == 0 || (elen == 1 && *element == '.')) {
-		return 1;
-	}
-	/* backtrack for .. */
-	if (elen == 2 && element[0] == '.' && element[1] == '.') {
-		/* if newpath's whole contents are '/', do nothing */
-		if (current <= root + 1)
+	/* the special cases here to skip empty paths, or ./.., should not
+	 * apply to plain files, which should just get bogus
+	 * paths.
+	 */
+	if (!is_reg) {
+		/* sanity-check:  ignore // or /./ */
+		if (elen == 0 || (elen == 1 && *element == '.')) {
 			return 1;
-		/* backtrack to the character before the / */
-		current -= 2;
-		/* now find the previous slash */
-		while (current > root && *current != '/') {
-			--current;
 		}
-		/* and point to the nul just past it */
-		*(++current) = '\0';
-		*pcurrent = current;
-		return 1;
+		/* backtrack for .. */
+		if (elen == 2 && element[0] == '.' && element[1] == '.') {
+			/* if newpath's whole contents are '/', do nothing */
+			if (current <= root + 1)
+				return 1;
+			/* backtrack to the character before the / */
+			current -= 2;
+			/* now find the previous slash */
+			while (current > root && *current != '/') {
+				--current;
+			}
+			/* and point to the nul just past it */
+			*(++current) = '\0';
+			*pcurrent = current;
+			return 1;
+		}
 	}
 	curlen = current - newpath;
 	/* current length, plus / <element> / \0 */
@@ -659,13 +665,20 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 	}
 	memcpy(current, element, elen);
 	current += elen;
-	/* nul-terminate, and we now point to the nul after the slash */
+	/* nul-terminate, and we now point to the nul after the element just added. */
 	*current = '\0';
 	/* now, the moment of truth... is that a symlink? */
 	/* if lstat fails, that's fine -- nonexistent files aren't symlinks */
-	if (!leave_this) {
-		int is_link;
-		is_link = (pseudo_real_lstat) && (pseudo_real_lstat(newpath, &buf) != -1) && S_ISLNK(buf.st_mode);
+	/* don't do this if the parent was a regular file. it shouldn't matter,
+	 * because readlink can't succeed in that case anyway.
+	 */
+	if (!leave_this && !is_reg) {
+		/* if this fails, just use the parent's mode. which shouldn't have
+		 * been a symlink, I hope? */
+		if (pseudo_real_lstat) {
+			pseudo_real_lstat(newpath, buf);
+		}
+		int is_link = S_ISLNK(buf->st_mode);
 		if (link_recursion >= PSEUDO_MAX_LINK_RECURSION && is_link) {
 			pseudo_diag("link recursion too deep, not expanding path '%s'.\n", newpath);
 			is_link = 0;
@@ -699,9 +712,9 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 			return retval;
 		}
 	}
-	/* okay, not a symlink, go ahead and append a slash */
-	*(current++) = '/';
-	*current = '\0';
+	/* we used to always append a slash here. now we don't; append_elements
+	 * handles slashes, so just update the pointer.
+	 */
 	*pcurrent = current;
 	return 1;
 }
@@ -709,6 +722,8 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 static int
 pseudo_append_elements(char *newpath, char *root, size_t allocated, char **current, const char *element, size_t elen, int leave_last) {
 	int retval = 1;
+	PSEUDO_STATBUF buf;
+	buf.st_mode = 0;
 	const char * start = element;
 	if (!newpath || !root ||
 	    !current || !*current ||
@@ -716,30 +731,41 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 		pseudo_diag("pseudo_append_elements: invalid arguments.");
 		return -1;
 	}
+	/* coming into append_elements, we should always have a trailing slash on
+	 * the path. append_element won't provide one, though.
+	 */
 	while (element < (start + elen) && *element) {
 		size_t this_elen;
 		int leave_this = 0;
+		int is_reg = S_ISREG(buf.st_mode);
 		char *next = strchr(element, '/');
 		if (!next) {
 			next = strchr(element, '\0');
 			leave_this = leave_last;
 		}
 		this_elen = next - element;
-		switch (this_elen) {
-		case 0: /* path => '/' */
-			break;
-		case 1: /* path => '?/' */
-			if (*element != '.') {
-				if (pseudo_append_element(newpath, root, allocated, current, element, this_elen, leave_this) == -1) {
-					retval = -1;
-				}
-			}
-			break;
-		default:
-			if (pseudo_append_element(newpath, root, allocated, current, element, this_elen, leave_this) == -1) {
+		/* for an empty path, or a "/.", we skip the append, but not for regular
+		 * files; regular files get it appended so they can fail properly
+		 * later for being invalid paths.
+		 */
+		if (is_reg || (this_elen > 1) || ((this_elen == 1) && (*element != '.'))) {
+			if (pseudo_append_element(newpath, root, allocated, current, element, this_elen, &buf, leave_this) == -1) {
 				retval = -1;
+				break;
 			}
-			break;
+			/* if a path element was appended, we want to know whether the resulting
+			 * thing is an existing regular file; regular files can't be further
+			 * explored, which actually means we *do* append path things to them
+			 * that would otherwise be skipped.
+			 */
+			if (!pseudo_real_lstat || (pseudo_real_lstat(newpath, &buf) == -1)) {
+				buf.st_mode = 0;
+			}
+			/* having grabbed a stat for the path, we append a slash so we can append to it again
+			 * if needed.
+			 */
+			*(*current)++ = '/';
+			*(*current) = '\0';
 		}
 		/* and now move past the separator */
 		element += this_elen + 1;

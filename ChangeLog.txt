@@ -1,3 +1,9 @@
+2018-03-06:
+	* (seebs) Update path handling a bit to correctly fail if a path
+	  tries to have a slash after a plain file name, even in cases
+	  like "foo/.", which were previously ignored (or in the case of
+	  "..", resolved as though it had been a directory).
+
 2018-03-01:
 	* (seebs) If you get a CREAT for an existing file, and it matches
 	  both path and inode, don't delete the entry because the inode
