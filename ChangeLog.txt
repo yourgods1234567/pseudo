@@ -1,3 +1,11 @@
+2018-03-29:
+	* (seebs) wrap syscall, and if SYS_renameat2 exists, try to
+	  reject it with ENOSYS, because coreutils started using a
+	  new syscall. An actual renameat2 wrapper will be a major
+	  effort ("changing the pseudo_ipc data structure") and is
+	  pointless when glibc hasn't got a wrapper so we have no
+	  viable test cases.
+
 2018-03-06:
 	* (seebs) Update path handling a bit to correctly fail if a path
 	  tries to have a slash after a plain file name, even in cases

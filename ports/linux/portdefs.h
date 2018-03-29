@@ -27,3 +27,4 @@ GLIBC_COMPAT_SYMBOL(memcpy,2.0);
 #endif
 
 #include <linux/capability.h>
+#include <sys/syscall.h>
