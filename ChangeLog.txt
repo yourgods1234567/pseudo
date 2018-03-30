@@ -1,3 +1,8 @@
+2018-03-30:
+	* (seebs) fix path stuff more thoroughly.
+	* (seebs) Merge suggested README change from Richard Tollerton
+	  <rich.tollerton@ni.com> pointing to oe-core list.
+
 2018-03-29:
 	* (seebs) wrap syscall, and if SYS_renameat2 exists, try to
 	  reject it with ENOSYS, because coreutils started using a

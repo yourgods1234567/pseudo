@@ -85,3 +85,10 @@ consistent support of the whole group for the project.  It's been a great
 deal of fun, and I'm pretty happy that we're finally ready to make it
 available for other people to look at.
 
+
+CONTACT:
+
+Discussions and patches should be directed at the openembedded-core mailing
+list at openembedded-core at lists.openembedded.org. More information at
+https://www.openembedded.org/wiki/Mailing_lists. Bugs should be filed with
+the Yocto project at https://bugzilla.yoctoproject.org/.
