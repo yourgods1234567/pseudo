@@ -1485,9 +1485,11 @@ base_path(int dirfd, const char *path, int leave_last) {
 	}
 
 	newpath = pseudo_fix_path(basepath, path, minlen, baselen, NULL, leave_last);
-	pseudo_debug(PDBGF_PATH, "base_path: %s</>%s\n",
+	pseudo_debug(PDBGF_PATH, "base_path[%s]: %s</>%s => %s\n",
+		leave_last ? "nofollow" : "follow",
 		basepath ? basepath : "<nil>",
-		path ? path : "<nil>");
+		path ? path : "<nil>",
+		newpath ? newpath : "<nil>");
 	return newpath;
 }
 

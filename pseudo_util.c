@@ -266,7 +266,7 @@ static int debugged_newline = 1;
 static char pid_text[32];
 static size_t pid_len;
 static int pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurrent, const char *element, size_t elen, PSEUDO_STATBUF *buf, int leave_this);
-static int pseudo_append_elements(char *newpath, char *root, size_t allocated, char **current, const char *elements, size_t elen, int leave_last);
+static int pseudo_append_elements(char *newpath, char *root, size_t allocated, char **current, const char *elements, size_t elen, int leave_last, PSEUDO_STATBUF *sbuf);
 extern char **environ;
 static ssize_t pseudo_max_pathlen = -1;
 static ssize_t pseudo_sys_max_pathlen = -1;
@@ -621,7 +621,7 @@ static int
 pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurrent, const char *element, size_t elen, PSEUDO_STATBUF *buf, int leave_this) {
 	static int link_recursion = 0;
 	size_t curlen;
-	int is_reg = S_ISREG(buf->st_mode);
+	int is_dir = S_ISDIR(buf->st_mode);
 	char *current;
 	if (!newpath ||
 	    !pcurrent || !*pcurrent ||
@@ -630,30 +630,31 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 		return -1;
 	}
 	current = *pcurrent;
-	pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "pae: %s, + %.*s\n",
-		newpath, (int) elen, element);
-	/* the special cases here to skip empty paths, or ./.., should not
-	 * apply to plain files, which should just get bogus
-	 * paths.
+	pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "pae: '%s', + '%.*s', is_dir %d\n",
+		newpath, (int) elen, element, is_dir);
+	/* the special cases here to skip empty paths, or ./.., should apply
+	 * only to directories; plain files, nodes, etcetera should just get
+	 * bogus paths.
 	 */
-	if (!is_reg) {
+	if (is_dir) {
 		/* sanity-check:  ignore // or /./ */
 		if (elen == 0 || (elen == 1 && *element == '.')) {
 			return 0;
 		}
 		/* backtrack for .. */
 		if (elen == 2 && element[0] == '.' && element[1] == '.') {
-			/* if newpath's whole contents are '/', do nothing */
-			if (current <= root + 1)
-				return 1;
-			/* backtrack to the character before the / */
-			current -= 2;
+			/* if newpath is empty, do nothing. */
+			if (current <= root)
+				return 0;
 			/* now find the previous slash */
 			while (current > root && *current != '/') {
 				--current;
 			}
-			/* and point to the nul just past it */
-			*(++current) = '\0';
+			/* either we're at root, or we're at a slash.
+			 * either way, nul that out, leaving us with a
+			 * possibly-empty path which is not slash-terminated.
+			 */
+			*current = '\0';
 			*pcurrent = current;
 			return 1;
 		}
@@ -665,21 +666,27 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 		pseudo_diag("pseudo_append_element: path too long (wanted %lu bytes).\n", (unsigned long) curlen + elen + 3);
 		return -1;
 	}
+	/* append a slash */
+	*current++ = '/';
 	memcpy(current, element, elen);
 	current += elen;
 	/* nul-terminate, and we now point to the nul after the element just added. */
 	*current = '\0';
-	/* now, the moment of truth... is that a symlink? */
-	/* if lstat fails, that's fine -- nonexistent files aren't symlinks */
-	/* don't do this if the parent was a regular file. it shouldn't matter,
-	 * because readlink can't succeed in that case anyway.
+	/* if we are not on the last element of a path and supposed to leave
+	 * it alone (for SYMLINK_NOFOLLOW type cases), and we are not trying to
+	 * go further under a regular file, we want to know whether this is a symlink.
+	 * either way, we want to update buf to show the correct state of the file.
 	 */
-	if (!leave_this && !is_reg) {
-		/* if this fails, just use the parent's mode. which shouldn't have
-		 * been a symlink, I hope? */
-		if (pseudo_real_lstat) {
-			pseudo_real_lstat(newpath, buf);
-		}
+	if (!pseudo_real_lstat || (pseudo_real_lstat(newpath, buf) == -1)) {
+		// if we can't stat it, zero mode so we don't think it's
+		// known to be a link or a regular file.
+		buf->st_mode = 0;
+	}
+	/* it is intentional that this uses the "stale" is_dir for the file we
+	 * were appending to. we don't want to actually try to do this when
+	 * we're appending names to a regular file.
+	 */
+	if (!leave_this && is_dir) {
 		int is_link = S_ISLNK(buf->st_mode);
 		if (link_recursion >= PSEUDO_MAX_LINK_RECURSION && is_link) {
 			pseudo_diag("link recursion too deep, not expanding path '%s'.\n", newpath);
@@ -702,14 +709,20 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 				current = newpath + 1;
 			} else {
 				/* point back at the end of the previous path... */
-				current -= elen;
+				current -= (elen + 1);
 			}
 			/* null terminate at the new pointer */
 			*current = '\0';
-			/* append all the elements in series */
 			*pcurrent = current;
+			/* we know that we're now pointing either at a directory we
+			 * already decided was safe to go into, or root. either way,
+			 * the parent item mode should reflect it being a directory.
+			 * we don't need to call stat for that.
+			 */
+			buf->st_mode = S_IFDIR;
+			/* append all the elements in series */
 			++link_recursion;
-			retval = pseudo_append_elements(newpath, root, allocated, pcurrent, linkbuf, linklen, 0);
+			retval = pseudo_append_elements(newpath, root, allocated, pcurrent, linkbuf, linklen, 0, buf);
 			--link_recursion;
 			return retval;
 		}
@@ -722,69 +735,55 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 }
 
 static int
-pseudo_append_elements(char *newpath, char *root, size_t allocated, char **current, const char *element, size_t elen, int leave_last) {
+pseudo_append_elements(char *newpath, char *root, size_t allocated, char **current, const char *path, size_t elen, int leave_last, PSEUDO_STATBUF *sbuf) {
 	int retval = 1;
+	/* a shareable buffer so we can cache stat results while walking the path */
 	PSEUDO_STATBUF buf;
 	buf.st_mode = 0;
-	int add_slash = 0;
-	const char * start = element;
+	const char * start = path;
 	if (!newpath || !root ||
 	    !current || !*current ||
-	    !element) {
+	    !path) {
 		pseudo_diag("pseudo_append_elements: invalid arguments.");
 		return -1;
 	}
+	if (!sbuf) {
+		/* we will use this buffer to hold "the current state of newpath".
+		 * append_element will update that whenever it appends an element,
+		 * and any calls back here from there will pass in the same buffer.
+		 * if we didn't get one, we start using this local one, which will
+		 * then get shared by anything we call.
+		 */
+		sbuf = &buf;
+		if (!pseudo_real_lstat || (pseudo_real_lstat(newpath, sbuf) == -1)) {
+			sbuf->st_mode = (*current > root) ? 0 : S_IFDIR;
+		}
+	}
 	pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "paes: newpath %s, element list <%.*s>\n",
-		newpath, (int) elen, element);
-	/* coming into append_elements, we should always have a trailing slash on
-	 * the path. append_element won't provide one, though.
-	 */
-	while (element < (start + elen) && *element) {
+		newpath, (int) elen, path);
+	while (path < (start + elen) && *path) {
 		size_t this_elen;
 		int leave_this = 0;
-		int is_reg = S_ISREG(buf.st_mode);
-		char *next = strchr(element, '/');
+		char *next = strchr(path, '/');
 		if (!next) {
-			next = strchr(element, '\0');
+			next = strchr(path, '\0');
 			leave_this = leave_last;
 		}
-		this_elen = next - element;
+		this_elen = next - path;
 		/* for a directory, we skip the append for empty path or ".";
 		 * regular files get it appended so they can fail properly
 		 * later for being invalid paths.
 		 */
 		pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "element to add: '%.*s'\n",
-			(int) this_elen, element);
-		/* we initially had a trailing slash. we don't
-		 * want append_element to append slashes, so every time through
-		 * this loop after the first, we want to add a slash.
-		 */
-		if (add_slash) {
-			*(*current)++ = '/';
-			*(*current) = '\0';
+			(int) this_elen, path);
+		if (pseudo_append_element(newpath, root, allocated, current, path, this_elen, sbuf, leave_this) == -1) {
+			retval = -1;
+			break;
 		}
-		if (is_reg || (this_elen > 1) || ((this_elen == 1) && (*element != '.'))) {
-			int appended = pseudo_append_element(newpath, root, allocated, current, element, this_elen, &buf, leave_this);
-			if (appended == -1) {
-				retval = -1;
-				break;
-			}
-			if (appended == 1) {
-				add_slash = 1;
-			}
-			pseudo_debug(PDBGF_FILE | PDBGF_VERBOSE, "paes: append_element gave us '%s', current '%s'\n",
-				newpath, *current);
-			/* if a path element was appended, we want to know whether the resulting
-			 * thing is an existing regular file; regular files can't be further
-			 * explored, which actually means we *do* append path things to them
-			 * that would otherwise be skipped.
-			 */
-			if (!pseudo_real_lstat || (pseudo_real_lstat(newpath, &buf) == -1)) {
-				buf.st_mode = 0;
-			}
-		}
+		pseudo_debug(PDBGF_FILE | PDBGF_VERBOSE, "paes: append_element gave us '%s', current '%s'\n",
+			newpath, *current);
 		/* and now move past the separator */
-		element += this_elen + 1;
+		path += this_elen + 1;
 	}
 	return retval;
 }
@@ -820,9 +819,12 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 	newpath = pathbufs[pathbuf];
 	pathbuf = (pathbuf + 1) % PATHBUFS;
 	pathlen = strlen(path);
-	/* a trailing slash has special meaning */
-	if (pathlen > 0 && path[pathlen - 1] == '/') {
+	/* a trailing slash has special meaning, but processing
+	 * trailing slashes is expensive.
+	 */
+	while (pathlen > 0 && path[pathlen - 1] == '/') {
 		trailing_slash = 1;
+		--pathlen;
 	}
 	/* allow a bit of slush.  overallocating a bit won't
 	 * hurt.  rounding to 256's in the hopes that it makes life
@@ -842,22 +844,24 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 	 * part of the string; you can't back up over it.
 	 */
 	effective_root = newpath + rootlen;
-	*current++ = '/';
 	*current = '\0';
 	/* at any given point:
-	 * current points to just after the last / of newpath
+	 * path is not slash-terminated
+	 * current points to the null byte immediately after the path
 	 * path points to the next element of path
 	 * newpathlen is the total allocated length of newpath
 	 * (current - newpath) is the used length of newpath
-	 *
-	 * ... the above is now slightly wrong, we start append_elements
-	 * and append_element with a trailing slash on the path, but
-	 * end them without.
 	 */
-	if (pseudo_append_elements(newpath, effective_root, newpathlen, &current, path, pathlen, leave_last) != -1) {
-		if (current > effective_root && trailing_slash) {
-			*current++ = '/';
-			*current++ = '\0';
+	if (pseudo_append_elements(newpath, effective_root, newpathlen, &current, path, pathlen, leave_last, 0) != -1) {
+		/* if we are expecting a trailing slash, or the path ended up being completely
+		 * empty (meaning it's pointing at either effective_root or the beginning of
+		 * the path), we need a slash here.
+		 */
+		if ((current == effective_root) || trailing_slash) {
+			if ((current - newpath) < (int) newpathlen) {
+				*current++ = '/';
+				*current = '\0';
+			}
 		}
 		pseudo_debug(PDBGF_PATH, "%s + %s => <%s>\n",
 			base ? base : "<nil>",
