@@ -97,6 +97,21 @@ posix_permissions(const acl_header *header, int entries, int *extra, int *mode) 
 	return 0;
 }
 
+static int get_special_bits(const char *path, int fd) {
+	int rc;
+	struct stat64 buf;
+	if (path) {
+		rc = lstat64(path, &buf);
+	} else {
+		rc = fstat64(fd, &buf);
+	}
+	if (rc == -1) {
+		return rc;
+	}
+
+	return buf.st_mode & (S_ISUID | S_ISGID | S_ISVTX);
+}
+
 #define RC_AND_BUF \
 	int rc; \
 	PSEUDO_STATBUF buf; \
@@ -172,6 +187,10 @@ static int shared_setxattr(const char *path, int fd, const char *name, const voi
 		int entries = (size - sizeof(acl_header)) / sizeof(acl_entry);
 		int res = posix_permissions(value, entries, &extra, &mode);
 		if (res == 0) {
+			/* POSIX ACLs don't actually include
+			 * setuid/setgid/sticky bit. We need to add those back
+			 * in ourselves. */
+			mode |= get_special_bits(path, fd);
 			pseudo_debug(PDBGF_XATTR, "posix_acl_access translated to mode %04o. Remaining attribute(s): %d.\n",
 				mode, extra);
 			buf.st_mode = mode;
