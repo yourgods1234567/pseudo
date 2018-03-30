@@ -639,7 +639,7 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 	if (!is_reg) {
 		/* sanity-check:  ignore // or /./ */
 		if (elen == 0 || (elen == 1 && *element == '.')) {
-			return 1;
+			return 0;
 		}
 		/* backtrack for .. */
 		if (elen == 2 && element[0] == '.' && element[1] == '.') {
@@ -734,8 +734,8 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 		pseudo_diag("pseudo_append_elements: invalid arguments.");
 		return -1;
 	}
-	pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "paes: element list <%.*s>\n",
-		(int) elen, element);
+	pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "paes: newpath %s, element list <%.*s>\n",
+		newpath, (int) elen, element);
 	/* coming into append_elements, we should always have a trailing slash on
 	 * the path. append_element won't provide one, though.
 	 */
@@ -753,7 +753,7 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 		 * regular files get it appended so they can fail properly
 		 * later for being invalid paths.
 		 */
-		pseudo_debug(PDBGF_FILE | PDBGF_VERBOSE, "element to add: '%.*s'\n",
+		pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "element to add: '%.*s'\n",
 			(int) this_elen, element);
 		/* we initially had a trailing slash. we don't
 		 * want append_element to append slashes, so every time through
@@ -762,13 +762,15 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 		if (add_slash) {
 			*(*current)++ = '/';
 			*(*current) = '\0';
-		} else {
-			add_slash = 1;
 		}
 		if (is_reg || (this_elen > 1) || ((this_elen == 1) && (*element != '.'))) {
-			if (pseudo_append_element(newpath, root, allocated, current, element, this_elen, &buf, leave_this) == -1) {
+			int appended = pseudo_append_element(newpath, root, allocated, current, element, this_elen, &buf, leave_this);
+			if (appended == -1) {
 				retval = -1;
 				break;
+			}
+			if (appended == 1) {
+				add_slash = 1;
 			}
 			pseudo_debug(PDBGF_FILE | PDBGF_VERBOSE, "paes: append_element gave us '%s', current '%s'\n",
 				newpath, *current);
