@@ -630,6 +630,8 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 		return -1;
 	}
 	current = *pcurrent;
+	pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "pae: %s, + %.*s\n",
+		newpath, (int) elen, element);
 	/* the special cases here to skip empty paths, or ./.., should not
 	 * apply to plain files, which should just get bogus
 	 * paths.
@@ -724,6 +726,7 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 	int retval = 1;
 	PSEUDO_STATBUF buf;
 	buf.st_mode = 0;
+	int add_slash = 0;
 	const char * start = element;
 	if (!newpath || !root ||
 	    !current || !*current ||
@@ -731,6 +734,8 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 		pseudo_diag("pseudo_append_elements: invalid arguments.");
 		return -1;
 	}
+	pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "paes: element list <%.*s>\n",
+		(int) elen, element);
 	/* coming into append_elements, we should always have a trailing slash on
 	 * the path. append_element won't provide one, though.
 	 */
@@ -744,15 +749,29 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 			leave_this = leave_last;
 		}
 		this_elen = next - element;
-		/* for an empty path, or a "/.", we skip the append, but not for regular
-		 * files; regular files get it appended so they can fail properly
+		/* for a directory, we skip the append for empty path or ".";
+		 * regular files get it appended so they can fail properly
 		 * later for being invalid paths.
 		 */
+		pseudo_debug(PDBGF_FILE | PDBGF_VERBOSE, "element to add: '%.*s'\n",
+			(int) this_elen, element);
+		/* we initially had a trailing slash. we don't
+		 * want append_element to append slashes, so every time through
+		 * this loop after the first, we want to add a slash.
+		 */
+		if (add_slash) {
+			*(*current)++ = '/';
+			*(*current) = '\0';
+		} else {
+			add_slash = 1;
+		}
 		if (is_reg || (this_elen > 1) || ((this_elen == 1) && (*element != '.'))) {
 			if (pseudo_append_element(newpath, root, allocated, current, element, this_elen, &buf, leave_this) == -1) {
 				retval = -1;
 				break;
 			}
+			pseudo_debug(PDBGF_FILE | PDBGF_VERBOSE, "paes: append_element gave us '%s', current '%s'\n",
+				newpath, *current);
 			/* if a path element was appended, we want to know whether the resulting
 			 * thing is an existing regular file; regular files can't be further
 			 * explored, which actually means we *do* append path things to them
@@ -761,11 +780,6 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 			if (!pseudo_real_lstat || (pseudo_real_lstat(newpath, &buf) == -1)) {
 				buf.st_mode = 0;
 			}
-			/* having grabbed a stat for the path, we append a slash so we can append to it again
-			 * if needed.
-			 */
-			*(*current)++ = '/';
-			*(*current) = '\0';
 		}
 		/* and now move past the separator */
 		element += this_elen + 1;
@@ -833,11 +847,15 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 	 * path points to the next element of path
 	 * newpathlen is the total allocated length of newpath
 	 * (current - newpath) is the used length of newpath
+	 *
+	 * ... the above is now slightly wrong, we start append_elements
+	 * and append_element with a trailing slash on the path, but
+	 * end them without.
 	 */
 	if (pseudo_append_elements(newpath, effective_root, newpathlen, &current, path, pathlen, leave_last) != -1) {
-		--current;
-		if (*current == '/' && current > effective_root && !trailing_slash) {
-			*current = '\0';
+		if (current > effective_root && trailing_slash) {
+			*current++ = '/';
+			*current++ = '\0';
 		}
 		pseudo_debug(PDBGF_PATH, "%s + %s => <%s>\n",
 			base ? base : "<nil>",
