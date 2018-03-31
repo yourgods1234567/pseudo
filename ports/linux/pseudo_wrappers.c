@@ -52,14 +52,13 @@ int pseudo_capset(cap_user_header_t hdrp, const cap_user_data_t datap) {
 
 long
 syscall(long number, ...) {
-	/* In a fit of optimism, I imagine that if we didn't get at least 7
-	 * arguments, reading past the ones we did get will read into this
-	 * space and maybe not clash with or overlap with any later-declared
-	 * values. This isn't really a guarantee, and is probably just
-	 * superstition.
-	 */
-	unsigned long long padding[7];
-	(void) padding;
+	long rc = -1;
+
+	if (!pseudo_check_wrappers() || !real_syscall) {
+		/* rc was initialized to the "failure" value */
+		pseudo_enosys("syscall");
+		return rc;
+	}
 
 #ifdef SYS_renameat2
 	/* concerns exist about trying to parse arguments because syscall(2)
@@ -78,7 +77,7 @@ syscall(long number, ...) {
 	 * guess about the number of args; the docs discuss calling conventions
 	 * up to 7, so let's try that?
 	 */
-	void *res = __builtin_apply((void (*)()) real_syscall, __builtin_apply_args(), sizeof(long long) * 7);
+	void *res = __builtin_apply((void (*)()) real_syscall, __builtin_apply_args(), sizeof(long) * 7);
 	__builtin_return(res);
 }
 

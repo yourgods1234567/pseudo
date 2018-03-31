@@ -4,6 +4,10 @@
 	  whether an error occurred, even if no call has returned
 	  a status indicating an error, and this is completely wrong
 	  but we can't fix them all.
+	* (seebs) check for wrapper initialization in syscall wrapper,
+	  because what if it was the *first* call someone made. (Thanks
+	  to Joshua Watt <jpewhacker@gmail.com> for diagnosing this
+	  before I got a chance.)
 
 2018-03-30:
 	* (seebs) fix path stuff more thoroughly.
