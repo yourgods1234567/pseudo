@@ -1,3 +1,10 @@
+2018-03-31:
+	* (seebs) keep pseudo_fix_path from changing errno, because
+	  *some* people think they should check errno to find out
+	  whether an error occurred, even if no call has returned
+	  a status indicating an error, and this is completely wrong
+	  but we can't fix them all.
+
 2018-03-30:
 	* (seebs) fix path stuff more thoroughly.
 	* (seebs) Merge suggested README change from Richard Tollerton

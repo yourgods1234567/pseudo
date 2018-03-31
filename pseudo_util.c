@@ -755,8 +755,15 @@ pseudo_append_elements(char *newpath, char *root, size_t allocated, char **curre
 		 * then get shared by anything we call.
 		 */
 		sbuf = &buf;
-		if (!pseudo_real_lstat || (pseudo_real_lstat(newpath, sbuf) == -1)) {
-			sbuf->st_mode = (*current > root) ? 0 : S_IFDIR;
+		if (*current > root) {
+			if (!pseudo_real_lstat || (pseudo_real_lstat(newpath, sbuf) == -1)) {
+				sbuf->st_mode = 0;
+			}
+		} else {
+			/* Don't call lstat on an empty path, or at all when we
+			 * know that "root" is always directory-like.
+			 */
+			sbuf->st_mode = S_IFDIR;
 		}
 	}
 	pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "paes: newpath %s, element list <%.*s>\n",
@@ -852,6 +859,7 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 	 * newpathlen is the total allocated length of newpath
 	 * (current - newpath) is the used length of newpath
 	 */
+	int save_errno = errno;
 	if (pseudo_append_elements(newpath, effective_root, newpathlen, &current, path, pathlen, leave_last, 0) != -1) {
 		/* if we are expecting a trailing slash, or the path ended up being completely
 		 * empty (meaning it's pointing at either effective_root or the beginning of
@@ -870,8 +878,10 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 		if (lenp) {
 			*lenp = current - newpath;
 		}
+		errno = save_errno;
 		return newpath;
 	} else {
+		errno = save_errno;
 		return 0;
 	}
 }
