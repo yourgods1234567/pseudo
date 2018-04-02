@@ -2,8 +2,11 @@
 @header
 @body
 /* 
- * Copyright (c) ${date} Wind River Systems; see
+ * Copyright (c) ${date} Peter Seebach/Seebs <seebs@seebs.net>; see
  * guts/COPYRIGHT for information.
+ *
+ * [Note: copyright added by code generator, may be
+ * incorrect. Remove this if you fix it.]
  *
  * ${comment}
  *	${rc_decl}

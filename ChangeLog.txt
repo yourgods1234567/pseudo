@@ -1,3 +1,8 @@
+2018-04-02:
+	* (seebs) Change default copyright notice in guts to
+	  say "Peter Seebach" rather than "Wind River" as I haven't
+	  worked there in over a year.
+
 2018-03-31:
 	* (seebs) keep pseudo_fix_path from changing errno, because
 	  *some* people think they should check errno to find out
