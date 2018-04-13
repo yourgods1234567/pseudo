@@ -53,7 +53,7 @@ extern void pseudo_evlog_dump(void);
 	if ((x) & PDBGF_VERBOSE) { \
 		if ((pseudo_util_debug_flags & PDBGF_VERBOSE) && (pseudo_util_debug_flags & ((x) & ~PDBGF_VERBOSE))) { pseudo_diag(__VA_ARGS__); } \
 	} else { \
-		if (pseudo_util_debug_flags & (x)) { pseudo_diag(__VA_ARGS__); } \
+		if ((pseudo_util_debug_flags & (x)) || ((x) == 0)) { pseudo_diag(__VA_ARGS__); } \
 	} \
 } while (0) 
 #define pseudo_debug_call(x, fn, ...) do { \

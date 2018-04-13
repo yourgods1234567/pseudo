@@ -1,3 +1,11 @@
+2018-04-13:
+	* (seebs) Reduce spamminess of path mismatches.
+	  Don't log path mismatches with multiple links unless you've
+	  requested path+verbose debugging. Also allow pseudo_debug
+	  to take a 0 to indicate "always debug", because we want that
+	  message unconditionally, and I don't want near-identical
+	  calls to diag() and debug().
+
 2018-04-02:
 	* (seebs) Change default copyright notice in guts to
 	  say "Peter Seebach" rather than "Wind River" as I haven't
