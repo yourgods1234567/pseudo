@@ -7,6 +7,7 @@
 	  calls to diag() and debug().
 	* (seebs) Fix a lurking stray slash that could happen while
 	  resolving absolute symlinks.
+	* (seebs) fix mishandled flags for symlink following.
 
 2018-04-02:
 	* (seebs) Change default copyright notice in guts to

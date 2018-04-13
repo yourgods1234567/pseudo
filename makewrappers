@@ -275,7 +275,7 @@ class Function:
                     self.specific_dirfds[arg.name[:-5]] = True
                 self.dirfd = 'dirfd'
             elif arg.name == 'flags':
-                self.flags = 'flags'
+                self.flags = '(flags & AT_SYMLINK_NOFOLLOW)'
             elif arg.name.endswith('path'):
                 self.paths_to_munge.append(arg.name)
     
