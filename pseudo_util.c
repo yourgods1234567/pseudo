@@ -706,7 +706,7 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 			linkbuf[linklen] = '\0';
 			/* absolute symlink means start over! */
 			if (*linkbuf == '/') {
-				current = newpath + 1;
+				current = newpath;
 			} else {
 				/* point back at the end of the previous path... */
 				current -= (elen + 1);
