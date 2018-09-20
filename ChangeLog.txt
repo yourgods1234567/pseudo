@@ -1,6 +1,7 @@
 2018-09-20:
 	* (seebs) coerce inodes to signed int64_t range when shoving
 	  them into sqlite.
+	* (seebs) add another /*fallthrough*/ comment to make gcc7 happy.
 
 2018-04-13:
 	* (seebs) Reduce spamminess of path mismatches.

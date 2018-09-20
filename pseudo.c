@@ -1019,6 +1019,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		if (msg->op == OP_REPLACE_XATTR) {
 			xattr_flags = XATTR_REPLACE;
 		}
+		/* fallthrough */
 	case OP_SET_XATTR:
 		if (pdb_set_xattr(msg, oldpath, oldpathlen, xattr_flags)) {
 			msg->result = RESULT_FAIL;
