@@ -370,6 +370,30 @@ dberr(sqlite3 *db, char *fmt, ...) {
 	}
 }
 
+/* sqlite3 supports only signed integers, thus, the highest positive
+ * value is 2^63-1. some filesystems with 64-bit ino_t will produce
+ * ino_t values in the 2^63..2^64-1 range. we convert those into
+ * the value you'd get treating the 2^63 bit as a sign bit, so sqlite
+ * doesn't convert them into floats, because the float type can't
+ * represent values accurately in this range, which can result in
+ * erroneous matches, etcetera.
+ *
+ * note, when reading the values back out, the conversion does the
+ * right thing. e.g., if the inode number had been 2^63 exactly,
+ * it will convert to -(2^63). that, converted to unsigned, will
+ * convert back to 2^63 exactly, etcetera.
+ *
+ * so far as i know, ino_t is always unsigned. we don't care about
+ * the 32-bit inode case; sqlite can represent those just fine.
+ */
+static int64_t
+signed_ino(ino_t ino) {
+	if (ino > (uint64_t) INT64_MAX) {
+		return (int64_t) (ino + INT64_MIN) + INT64_MIN;
+	}
+	return (int64_t) ino;
+}
+
 #ifdef USE_MEMORY_DB
 
 static void
@@ -782,7 +806,7 @@ pdb_log_traits(pseudo_query_t *traits) {
 			e->gid = trait->data.ivalue;
 			break;
 		case PSQF_INODE:
-			e->ino = trait->data.ivalue;
+			e->ino = (ino_t) trait->data.ivalue;
 			break;
 		case PSQF_MODE:
 			e->mode = trait->data.ivalue;
@@ -875,7 +899,7 @@ pdb_log_entry(log_entry *e) {
 		sqlite3_bind_int(insert, field++, e->client);
 		sqlite3_bind_int(insert, field++, e->dev);
 		sqlite3_bind_int(insert, field++, e->gid);
-		sqlite3_bind_int64(insert, field++, e->ino);
+		sqlite3_bind_int64(insert, field++, signed_ino(e->ino));
 		sqlite3_bind_int(insert, field++, e->mode);
 		if (e->path) {
 			sqlite3_bind_text(insert, field++, e->path, -1, SQLITE_STATIC);
@@ -969,7 +993,7 @@ pdb_log_msg(pseudo_sev_t severity, pseudo_msg_t *msg, const char *program, const
 		sqlite3_bind_int(insert, field++, msg->client);
 		sqlite3_bind_int(insert, field++, msg->dev);
 		sqlite3_bind_int(insert, field++, msg->gid);
-		sqlite3_bind_int64(insert, field++, msg->ino);
+		sqlite3_bind_int64(insert, field++, signed_ino(msg->ino));
 		sqlite3_bind_int(insert, field++, msg->mode);
 		if (msg->pathlen) {
 			sqlite3_bind_text(insert, field++, msg->path, -1, SQLITE_STATIC);
@@ -1376,7 +1400,7 @@ pdb_history_entry(log_history h) {
 			l->gid = sqlite3_column_int64(h->stmt, column++);
 			break;
 		case PSQF_INODE:
-			l->ino = sqlite3_column_int64(h->stmt, column++);
+			l->ino = (ino_t) sqlite3_column_int64(h->stmt, column++);
 			break;
 		case PSQF_MODE:
 			l->mode = sqlite3_column_int64(h->stmt, column++);
@@ -1512,9 +1536,9 @@ pdb_clear_xattrs(pseudo_msg_t *msg) {
 		}
 	}
 	sqlite3_bind_int(delete, 1, msg->dev);
-	sqlite3_bind_int(delete, 2, msg->ino);
+	sqlite3_bind_int(delete, 2, signed_ino(msg->ino));
 	sqlite3_bind_int(delete, 3, msg->dev);
-	sqlite3_bind_int(delete, 4, msg->ino);
+	sqlite3_bind_int(delete, 4, signed_ino(msg->ino));
 	rc = sqlite3_step(delete);
 	if (rc != SQLITE_DONE) {
 		dberr(file_db, "delete of unused xattrs may have failed");
@@ -1549,9 +1573,9 @@ pdb_copy_xattrs(pseudo_msg_t *oldmsg, pseudo_msg_t *msg) {
 		}
 	}
 	sqlite3_bind_int(copy, 1, msg->dev);
-	sqlite3_bind_int(copy, 2, msg->ino);
+	sqlite3_bind_int(copy, 2, signed_ino(msg->ino));
 	sqlite3_bind_int(copy, 3, oldmsg->dev);
-	sqlite3_bind_int(copy, 4, oldmsg->ino);
+	sqlite3_bind_int(copy, 4, signed_ino(oldmsg->ino));
 	rc = sqlite3_step(copy);
 	if (rc != SQLITE_DONE) {
 		dberr(file_db, "copy of xattrs may have failed");
@@ -1581,7 +1605,7 @@ pdb_check_xattrs(pseudo_msg_t *msg) {
 	}
 	int existing;
 	sqlite3_bind_int(scan, 1, msg->dev);
-	sqlite3_bind_int(scan, 2, msg->ino);
+	sqlite3_bind_int(scan, 2, signed_ino(msg->ino));
 	rc = sqlite3_step(scan);
 	if (rc == SQLITE_ROW) {
 		existing = (int) sqlite3_column_int64(scan, 0);
@@ -1635,7 +1659,7 @@ pdb_link_file(pseudo_msg_t *msg) {
 		sqlite3_bind_text(insert, 1, "NAMELESS FILE", -1, SQLITE_STATIC);
 	}
 	sqlite3_bind_int(insert, 2, msg->dev);
-	sqlite3_bind_int64(insert, 3, msg->ino);
+	sqlite3_bind_int64(insert, 3, signed_ino(msg->ino));
 	sqlite3_bind_int(insert, 4, msg->uid);
 	sqlite3_bind_int(insert, 5, msg->gid);
 	sqlite3_bind_int(insert, 6, msg->mode);
@@ -1676,7 +1700,7 @@ pdb_unlink_file_dev(pseudo_msg_t *msg) {
 		return 1;
 	}
 	sqlite3_bind_int(sql_delete, 1, msg->dev);
-	sqlite3_bind_int64(sql_delete, 2, msg->ino);
+	sqlite3_bind_int64(sql_delete, 2, signed_ino(msg->ino));
 	file_db_dirty = 1;
 	rc = sqlite3_step(sql_delete);
 	if (rc != SQLITE_DONE) {
@@ -2168,7 +2192,7 @@ pdb_update_inode(pseudo_msg_t *msg) {
 		pdb_copy_xattrs(oldmsg, msg);
 	}
 	sqlite3_bind_int(update, 1, msg->dev);
-	sqlite3_bind_int64(update, 2, msg->ino);
+	sqlite3_bind_int64(update, 2, signed_ino(msg->ino));
 	rc = sqlite3_bind_text(update, 3, msg->path, -1, SQLITE_STATIC);
 	if (rc) {
 		/* msg->path can never be null, and if msg didn't
@@ -2225,7 +2249,7 @@ pdb_update_file(pseudo_msg_t *msg) {
 	sqlite3_bind_int(update, 3, msg->mode);
 	sqlite3_bind_int(update, 4, msg->rdev);
 	sqlite3_bind_int(update, 5, msg->dev);
-	sqlite3_bind_int64(update, 6, msg->ino);
+	sqlite3_bind_int64(update, 6, signed_ino(msg->ino));
 
 	file_db_dirty = 1;
 	rc = sqlite3_step(update);
@@ -2266,7 +2290,7 @@ pdb_find_file_exact(pseudo_msg_t *msg) {
 		dberr(file_db, "error binding %s to select", msg->pathlen ? msg->path : "<nil>");
 	}
 	sqlite3_bind_int(select, 2, msg->dev);
-	sqlite3_bind_int64(select, 3, msg->ino);
+	sqlite3_bind_int64(select, 3, signed_ino(msg->ino));
 	rc = sqlite3_step(select);
 	switch (rc) {
 	case SQLITE_ROW:
@@ -2325,7 +2349,7 @@ pdb_find_file_path(pseudo_msg_t *msg) {
 	switch (rc) {
 	case SQLITE_ROW:
 		msg->dev = sqlite3_column_int64(select, 2);
-		msg->ino = sqlite3_column_int64(select, 3);
+		msg->ino = (ino_t) sqlite3_column_int64(select, 3);
 		msg->uid = sqlite3_column_int64(select, 4);
 		msg->gid = sqlite3_column_int64(select, 5);
 		msg->mode = sqlite3_column_int64(select, 6);
@@ -2370,7 +2394,7 @@ pdb_get_file_path(pseudo_msg_t *msg) {
 		return 0;
 	}
 	sqlite3_bind_int(select, 1, msg->dev);
-	sqlite3_bind_int64(select, 2, msg->ino);
+	sqlite3_bind_int64(select, 2, signed_ino(msg->ino));
 	rc = sqlite3_step(select);
 	switch (rc) {
 	case SQLITE_ROW:
@@ -2419,7 +2443,7 @@ pdb_find_file_dev(pseudo_msg_t *msg, char **path) {
 		return 1;
 	}
 	sqlite3_bind_int(select, 1, msg->dev);
-	sqlite3_bind_int64(select, 2, msg->ino);
+	sqlite3_bind_int64(select, 2, signed_ino(msg->ino));
 	rc = sqlite3_step(select);
 	switch (rc) {
 	case SQLITE_ROW:
@@ -2471,7 +2495,7 @@ pdb_get_xattr(pseudo_msg_t *msg, char **value, size_t *len) {
 	}
 	pseudo_debug(PDBGF_XATTR, "requested xattr named '%s' for ino %lld\n", *value, (long long) msg->ino);
 	sqlite3_bind_int(select, 1, msg->dev);
-	sqlite3_bind_int(select, 2, msg->ino);
+	sqlite3_bind_int(select, 2, signed_ino(msg->ino));
 	rc = sqlite3_bind_text(select, 3, *value, -1, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to SELECT.");
@@ -2533,7 +2557,7 @@ pdb_list_xattr(pseudo_msg_t *msg, char **value, size_t *len) {
 		}
 	}
 	sqlite3_bind_int(select, 1, msg->dev);
-	sqlite3_bind_int(select, 2, msg->ino);
+	sqlite3_bind_int(select, 2, signed_ino(msg->ino));
 	do {
 		rc = sqlite3_step(select);
 		if (rc == SQLITE_ROW) {
@@ -2587,7 +2611,7 @@ pdb_remove_xattr(pseudo_msg_t *msg, char *value, size_t len) {
 		}
 	}
 	sqlite3_bind_int(delete, 1, msg->dev);
-	sqlite3_bind_int(delete, 2, msg->ino);
+	sqlite3_bind_int(delete, 2, signed_ino(msg->ino));
 	rc = sqlite3_bind_text(delete, 3, value, len, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to DELETE.");
@@ -2628,7 +2652,7 @@ pdb_set_xattr(pseudo_msg_t *msg, char *value, size_t len, int flags) {
 		}
 	}
 	sqlite3_bind_int(select, 1, msg->dev);
-	sqlite3_bind_int(select, 2, msg->ino);
+	sqlite3_bind_int(select, 2, signed_ino(msg->ino));
 	rc = sqlite3_bind_text(select, 3, value, -1, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to SELECT.");
@@ -2697,7 +2721,7 @@ pdb_set_xattr(pseudo_msg_t *msg, char *value, size_t len, int flags) {
 			}
 		}
 		sqlite3_bind_int64(insert, 1, msg->dev);
-		sqlite3_bind_int64(insert, 2, msg->ino);
+		sqlite3_bind_int64(insert, 2, signed_ino(msg->ino));
 		rc = sqlite3_bind_text(insert, 3, vname, -1, SQLITE_STATIC);
 		if (rc) {
 			dberr(file_db, "couldn't bind xattr name to INSERT statement");
@@ -2743,7 +2767,7 @@ pdb_find_file_ino(pseudo_msg_t *msg) {
 	if (!msg) {
 		return 1;
 	}
-	sqlite3_bind_int64(select, 1, msg->ino);
+	sqlite3_bind_int64(select, 1, signed_ino(msg->ino));
 	rc = sqlite3_step(select);
 	switch (rc) {
 	case SQLITE_ROW:
@@ -2818,7 +2842,7 @@ pdb_file(pdb_file_list l) {
 	}
 	pseudo_debug(PDBGF_DB, "pdb_file: '%s'\n", s ? (const char *) s : "<nil>");
 	m->dev = sqlite3_column_int64(l->stmt, column++);
-	m->ino = sqlite3_column_int64(l->stmt, column++);
+	m->ino = (ino_t) sqlite3_column_int64(l->stmt, column++);
 	m->uid = sqlite3_column_int64(l->stmt, column++);
 	m->gid = sqlite3_column_int64(l->stmt, column++);
 	m->mode = sqlite3_column_int64(l->stmt, column++);
