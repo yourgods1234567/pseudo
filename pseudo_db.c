@@ -1536,9 +1536,9 @@ pdb_clear_xattrs(pseudo_msg_t *msg) {
 		}
 	}
 	sqlite3_bind_int(delete, 1, msg->dev);
-	sqlite3_bind_int(delete, 2, signed_ino(msg->ino));
+	sqlite3_bind_int64(delete, 2, signed_ino(msg->ino));
 	sqlite3_bind_int(delete, 3, msg->dev);
-	sqlite3_bind_int(delete, 4, signed_ino(msg->ino));
+	sqlite3_bind_int64(delete, 4, signed_ino(msg->ino));
 	rc = sqlite3_step(delete);
 	if (rc != SQLITE_DONE) {
 		dberr(file_db, "delete of unused xattrs may have failed");
@@ -1573,9 +1573,9 @@ pdb_copy_xattrs(pseudo_msg_t *oldmsg, pseudo_msg_t *msg) {
 		}
 	}
 	sqlite3_bind_int(copy, 1, msg->dev);
-	sqlite3_bind_int(copy, 2, signed_ino(msg->ino));
+	sqlite3_bind_int64(copy, 2, signed_ino(msg->ino));
 	sqlite3_bind_int(copy, 3, oldmsg->dev);
-	sqlite3_bind_int(copy, 4, signed_ino(oldmsg->ino));
+	sqlite3_bind_int64(copy, 4, signed_ino(oldmsg->ino));
 	rc = sqlite3_step(copy);
 	if (rc != SQLITE_DONE) {
 		dberr(file_db, "copy of xattrs may have failed");
@@ -1605,7 +1605,7 @@ pdb_check_xattrs(pseudo_msg_t *msg) {
 	}
 	int existing;
 	sqlite3_bind_int(scan, 1, msg->dev);
-	sqlite3_bind_int(scan, 2, signed_ino(msg->ino));
+	sqlite3_bind_int64(scan, 2, signed_ino(msg->ino));
 	rc = sqlite3_step(scan);
 	if (rc == SQLITE_ROW) {
 		existing = (int) sqlite3_column_int64(scan, 0);
@@ -2495,7 +2495,7 @@ pdb_get_xattr(pseudo_msg_t *msg, char **value, size_t *len) {
 	}
 	pseudo_debug(PDBGF_XATTR, "requested xattr named '%s' for ino %lld\n", *value, (long long) msg->ino);
 	sqlite3_bind_int(select, 1, msg->dev);
-	sqlite3_bind_int(select, 2, signed_ino(msg->ino));
+	sqlite3_bind_int64(select, 2, signed_ino(msg->ino));
 	rc = sqlite3_bind_text(select, 3, *value, -1, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to SELECT.");
@@ -2557,7 +2557,7 @@ pdb_list_xattr(pseudo_msg_t *msg, char **value, size_t *len) {
 		}
 	}
 	sqlite3_bind_int(select, 1, msg->dev);
-	sqlite3_bind_int(select, 2, signed_ino(msg->ino));
+	sqlite3_bind_int64(select, 2, signed_ino(msg->ino));
 	do {
 		rc = sqlite3_step(select);
 		if (rc == SQLITE_ROW) {
@@ -2611,7 +2611,7 @@ pdb_remove_xattr(pseudo_msg_t *msg, char *value, size_t len) {
 		}
 	}
 	sqlite3_bind_int(delete, 1, msg->dev);
-	sqlite3_bind_int(delete, 2, signed_ino(msg->ino));
+	sqlite3_bind_int64(delete, 2, signed_ino(msg->ino));
 	rc = sqlite3_bind_text(delete, 3, value, len, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to DELETE.");
@@ -2652,7 +2652,7 @@ pdb_set_xattr(pseudo_msg_t *msg, char *value, size_t len, int flags) {
 		}
 	}
 	sqlite3_bind_int(select, 1, msg->dev);
-	sqlite3_bind_int(select, 2, signed_ino(msg->ino));
+	sqlite3_bind_int64(select, 2, signed_ino(msg->ino));
 	rc = sqlite3_bind_text(select, 3, value, -1, SQLITE_STATIC);
 	if (rc) {
 		dberr(file_db, "couldn't bind xattr name to SELECT.");

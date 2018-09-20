@@ -2,6 +2,9 @@
 	* (seebs) coerce inodes to signed int64_t range when shoving
 	  them into sqlite.
 	* (seebs) add another /*fallthrough*/ comment to make gcc7 happy.
+	* (seebs) also make sure inodes are handled as 64-bit, not
+	  32-bit, which probably matters more. Thanks to <Jack.Fewx@dell.com>
+	  for catching this.
 
 2018-04-13:
 	* (seebs) Reduce spamminess of path mismatches.
