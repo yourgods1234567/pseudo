@@ -1,3 +1,8 @@
+2018-11-29:
+	* (seebs) add missing <stdint.h> to pseudo_db.c. Thanks to
+	  Bernhard Hartleb <bernhard.hartleb@gmail.com> for pointing
+	  this out.
+
 2018-09-20:
 	* (seebs) coerce inodes to signed int64_t range when shoving
 	  them into sqlite.
