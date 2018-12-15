@@ -26,13 +26,17 @@
 #include <ctype.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/socket.h>
 
 #include "pseudo.h"
 #include "pseudo_ipc.h"
 
-/* Short reads or writes can cause a sigpipe, killing the program, so we
- * trap it and report that something happened.
+/* Short reads or writes can cause a sigpipe, killing the program, so
+ * we trap it and report that something happened. We can avoid the
+ * overhead of setting/restoring the SIGPIPE handler if MSG_NOSIGNAL
+ * is available.
  */
+#ifndef MSG_NOSIGNAL
 static sig_atomic_t pipe_error = 0;
 static void (*old_handler)(int) = SIG_DFL;
 
@@ -51,6 +55,9 @@ static void
 allow_sigpipe(void) {
 	signal(SIGPIPE, old_handler);
 }
+#else
+#define pipe_error 0
+#endif
 
 #if 0
 /* useful only when debugging crazy stuff */
@@ -66,6 +73,36 @@ display_msg_header(pseudo_msg_t *msg) {
 }
 #endif
 
+#ifdef MSG_NOSIGNAL
+static int
+do_send(int fd, struct iovec *iov, int iovlen)
+{
+	struct msghdr hdr;
+
+	memset(&hdr, 0, sizeof(hdr));
+	hdr.msg_iov = iov;
+	hdr.msg_iovlen = iovlen;
+
+	return sendmsg(fd, &hdr, MSG_NOSIGNAL);
+}
+#else
+static int
+do_send(int fd, struct iovec *iov, int iovlen)
+{
+	int r, s = 0, i;
+
+	ignore_sigpipe();
+	for (i = 0; i < iovlen; ++i) {
+		r = write(fd, iov[i].iov_base, iov[i].iov_len);
+		s += r;
+		if (r != (int)iov[i].iov_len)
+			break;
+	}
+	allow_sigpipe();
+	return s;
+}
+#endif
+
 /*
  * send message on fd
  * return:
@@ -75,6 +112,7 @@ display_msg_header(pseudo_msg_t *msg) {
  */
 int
 pseudo_msg_send(int fd, pseudo_msg_t *msg, size_t len, const char *path) {
+	struct iovec iov[2];
 	int r;
 
 	if (!msg)
@@ -89,14 +127,13 @@ pseudo_msg_send(int fd, pseudo_msg_t *msg, size_t len, const char *path) {
 		if (len == (size_t) -1)
 			len = strlen(path) + 1;
 		msg->pathlen = len;
-		ignore_sigpipe();
-		r = write(fd, msg, PSEUDO_HEADER_SIZE);
-		if (r == PSEUDO_HEADER_SIZE) {
-			r += write(fd, path, len);
-		}
-		allow_sigpipe();
+		iov[0].iov_base = msg;
+		iov[0].iov_len = PSEUDO_HEADER_SIZE;
+		iov[1].iov_base = (void*)path;
+		iov[1].iov_len = len;
+		r = do_send(fd, iov, 2);
 		pseudo_debug(PDBGF_IPC | PDBGF_VERBOSE, "wrote %d bytes\n", r);
-		if (pipe_error || (r == -1 && errno == EBADF))
+		if (pipe_error || (r == -1 && (errno == EBADF || errno == EPIPE)))
 			return -1;
 		return ((size_t) r != PSEUDO_HEADER_SIZE + len);
 	} else {
@@ -105,11 +142,11 @@ pseudo_msg_send(int fd, pseudo_msg_t *msg, size_t len, const char *path) {
 			msg->result, pseudo_res_name(msg->result),
 			msg->pathlen, msg->path, (int) msg->mode);
 		// display_msg_header(msg);
-		ignore_sigpipe();
-		r = write(fd, msg, PSEUDO_HEADER_SIZE + msg->pathlen);
-		allow_sigpipe();
+		iov[0].iov_base = msg;
+		iov[0].iov_len = PSEUDO_HEADER_SIZE + msg->pathlen;
+		r = do_send(fd, iov, 1);
 		pseudo_debug(PDBGF_IPC | PDBGF_VERBOSE, "wrote %d bytes\n", r);
-		if (pipe_error || (r == -1 && errno == EBADF))
+		if (pipe_error || (r == -1 && (errno == EBADF || errno == EPIPE)))
 			return -1;
 		return ((size_t) r != PSEUDO_HEADER_SIZE + msg->pathlen);
 	}
