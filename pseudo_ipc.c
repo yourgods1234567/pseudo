@@ -113,7 +113,7 @@ do_send(int fd, struct iovec *iov, int iovlen)
 int
 pseudo_msg_send(int fd, pseudo_msg_t *msg, size_t len, const char *path) {
 	struct iovec iov[2];
-	int r;
+	int r, iovc;
 
 	if (!msg)
 		return 1;
@@ -131,11 +131,7 @@ pseudo_msg_send(int fd, pseudo_msg_t *msg, size_t len, const char *path) {
 		iov[0].iov_len = PSEUDO_HEADER_SIZE;
 		iov[1].iov_base = (void*)path;
 		iov[1].iov_len = len;
-		r = do_send(fd, iov, 2);
-		pseudo_debug(PDBGF_IPC | PDBGF_VERBOSE, "wrote %d bytes\n", r);
-		if (pipe_error || (r == -1 && (errno == EBADF || errno == EPIPE)))
-			return -1;
-		return ((size_t) r != PSEUDO_HEADER_SIZE + len);
+		iovc = 2;
 	} else {
 		pseudo_debug(PDBGF_IPC, "msg type %d (%s), result %d (%s), path %.*s, mode 0%o\n",
 			msg->type, pseudo_op_name(msg->op),
@@ -144,12 +140,13 @@ pseudo_msg_send(int fd, pseudo_msg_t *msg, size_t len, const char *path) {
 		// display_msg_header(msg);
 		iov[0].iov_base = msg;
 		iov[0].iov_len = PSEUDO_HEADER_SIZE + msg->pathlen;
-		r = do_send(fd, iov, 1);
-		pseudo_debug(PDBGF_IPC | PDBGF_VERBOSE, "wrote %d bytes\n", r);
-		if (pipe_error || (r == -1 && (errno == EBADF || errno == EPIPE)))
-			return -1;
-		return ((size_t) r != PSEUDO_HEADER_SIZE + msg->pathlen);
+		iovc = 1;
 	}
+	r = do_send(fd, iov, iovc);
+	pseudo_debug(PDBGF_IPC | PDBGF_VERBOSE, "wrote %d bytes\n", r);
+	if (pipe_error || (r == -1 && (errno == EBADF || errno == EPIPE)))
+		return -1;
+	return ((size_t) r != PSEUDO_HEADER_SIZE + msg->pathlen);
 }
 
 /* attempts to receive a message from fd

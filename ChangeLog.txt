@@ -1,5 +1,6 @@
 2018-12-15:
 	* (seebs) Import IPC patch from Rasmus Villemoes.
+	* (seebs) Import (another) IPC patch from Rasmus Villemoes.
 
 2018-11-29:
 	* (seebs) add missing <stdint.h> to pseudo_db.c. Thanks to
