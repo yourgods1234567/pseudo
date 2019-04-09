@@ -1,3 +1,6 @@
+2019-04-09:
+	* (seebs) Partial fix for db corruption issue.
+
 2018-12-15:
 	* (seebs) Import IPC patch from Rasmus Villemoes.
 	* (seebs) Import (another) IPC patch from Rasmus Villemoes.

@@ -630,15 +630,15 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			pseudo_diag("dir mismatch: '%s' [%llu] db mode 0%o, header mode 0%o (unlinking db)\n",
 				msg->path, (unsigned long long) by_path.ino,
 				(int) by_path.mode, (int) msg_header.mode);
-			/* unlink everything with this inode */
-			pdb_unlink_file_dev(&by_path);
+			/* unlink this path -- the inode may be in use elsewhere */
+			pdb_unlink_file(msg);
 			found_path = 0;
 		} else if (S_ISLNK(by_path.mode) != S_ISLNK(msg_header.mode)) {
 			pseudo_diag("symlink mismatch: '%s' [%llu] db mode 0%o, header mode 0%o (unlinking db)\n",
 				msg->path, (unsigned long long) by_path.ino,
 				(int) by_path.mode, (int) msg_header.mode);
-			/* unlink everything with this inode */
-			pdb_unlink_file_dev(&by_path);
+			/* unlink this path -- the inode may be in use elsewhere */
+			pdb_unlink_file(msg);
 			found_path = 0;
 		}
 		if (trailing_slash && !S_ISDIR(by_path.mode)) {
