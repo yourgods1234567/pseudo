@@ -1,3 +1,7 @@
+2019-04-10:
+	* (seebs) Experimental workaround for special non-blocking open
+	  case.
+
 2019-04-09:
 	* (seebs) Partial fix for db corruption issue.
 	* (seebs) Make a glibc renameat2 wrapper that just fails because

@@ -7,8 +7,10 @@
  *	int rc = -1;
  */
 	struct stat64 buf;
+	int overly_magic_nonblocking = 0;
 	int existed = 1;
 	int save_errno;
+	sigset_t local_saved_sigmask;
 
 	/* mask out mode bits appropriately */
 	mode = mode & ~pseudo_umask;
@@ -61,6 +63,27 @@
 		errno = save_errno;
 	}
 
+	/* if a pipe is opened without O_NONBLOCK, for only reading or
+	 * only writing, it can block forever. We need to do extra magic
+	 * in that case...
+	 */
+	if (!(flags & O_NONBLOCK) && ((flags & (O_WRONLY | O_RDONLY | O_RDWR)) != O_RDWR)) {
+		save_errno = errno;
+#ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
+		rc = real___xstat64(_STAT_VER, path, &buf);
+#else
+		rc = real___fxstatat64(_STAT_VER, dirfd, path, &buf, 0);
+#endif
+		if (rc != -1 && S_ISFIFO(buf.st_mode)) {
+			overly_magic_nonblocking = 1;
+		}
+	}
+
+	/* this is a horrible special case and i do not know whether it will work */
+	if (overly_magic_nonblocking) {
+		pseudo_droplock();
+		sigprocmask(SIG_SETMASK, &pseudo_saved_sigmask, &local_saved_sigmask);
+	}
 	/* because we are not actually root, secretly mask in 0600 to the
 	 * underlying mode.  The ", 0" is because the only time mode matters
 	 * is if a file is going to be created, in which case it's
@@ -71,6 +94,20 @@
 #else
 	rc = real_openat(dirfd, path, flags, PSEUDO_FS_MODE(mode, 0));
 #endif
+	if (overly_magic_nonblocking) {
+		save_errno = errno;
+		sigprocmask(SIG_SETMASK, &local_saved_sigmask, NULL);
+		/* well this is a problem. we can't NOT proceed; we may have
+		 * already opened the file! we can't even return up the call
+		 * stack to stuff that's going to try to drop the lock.
+		 */
+		if (pseudo_getlock()) {
+			pseudo_diag("PANIC: after opening a readonly/writeonly FIFO (path '%s', fd %d, errno %d, saved errno %d), could not regain lock. unrecoverable. sorry. bye.\n",
+				path, rc, errno, save_errno);
+			abort();
+		}
+		errno = save_errno;
+	}
 
 	if (rc != -1) {
 		save_errno = errno;
