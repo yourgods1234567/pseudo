@@ -9,6 +9,11 @@
  *	int rc = -1;
  */
 
+	(void) olddirfd;
+	(void) oldpath;
+	(void) newdirfd;
+	(void) newpath;
+	(void) flags;
 	/* for now, let's try just failing out hard, and hope things retry with a
 	 * different syscall.
 	 */

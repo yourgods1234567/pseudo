@@ -1,6 +1,7 @@
 2019-04-10:
 	* (seebs) Experimental workaround for special non-blocking open
 	  case.
+	* (seebs) fix warnings in renameat2.
 
 2019-04-09:
 	* (seebs) Partial fix for db corruption issue.
