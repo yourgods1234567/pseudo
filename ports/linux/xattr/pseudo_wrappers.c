@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
+ */
 /* shared functionality for the xattr code */
 /* Each of these functions is expecting to get an optional name, and
  * a populated statbuf to use for sending messages to the server.

@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
+ */
 static int
 wrap_clone(int (*fn)(void *), void *child_stack, int flags, void *arg) {
 	/* unused */

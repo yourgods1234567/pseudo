@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
 
 # Return vals: 2 - Unable to run xattr commands
 #              1 - Invalid return value

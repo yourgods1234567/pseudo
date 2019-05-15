@@ -2,6 +2,8 @@
  * Copyright (c) 2010 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static struct group *
  * wrap_getgrent(void) {
  *	struct group * rc = NULL;

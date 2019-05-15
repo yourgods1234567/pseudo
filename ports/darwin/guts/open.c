@@ -2,6 +2,8 @@
  * Copyright (c) 2011-2013 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * int open(const char *path, int flags, ... { int mode })
  *	int rc = -1;
  */

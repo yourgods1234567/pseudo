@@ -2,6 +2,8 @@
  * Copyright (c) 2010 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static int
  * wrap_getgrouplist(const char *name, int basegid, int *groups, int *ngroups) {
  *	int rc = -1;

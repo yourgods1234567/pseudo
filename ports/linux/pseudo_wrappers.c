@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
+ */
 /* the unix port wants to know that real_stat() and
  * friends exist.  So they do. And because the Linux
  * port really uses stat64 for those...

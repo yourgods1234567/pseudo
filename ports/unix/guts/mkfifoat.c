@@ -2,6 +2,8 @@
  * Copyright (c) 2015 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static int
  * wrap_mkfifoat(int dirfd, const char *path, mode_t mode) {
  *	int rc = -1;

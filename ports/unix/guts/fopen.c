@@ -2,6 +2,8 @@
  * Copyright (c) 2008-2010, 2012 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static FILE *
  * wrap_fopen(const char *path, const char *mode) {
  *	FILE * rc = 0;

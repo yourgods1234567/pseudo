@@ -8,6 +8,8 @@
  * [Note: copyright added by code generator, may be
  * incorrect. Remove this if you fix it.]
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * ${comment}
  *	${rc_decl}
  */

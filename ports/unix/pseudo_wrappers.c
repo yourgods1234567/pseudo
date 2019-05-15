@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
+ */
 FILE *
 popen(const char *command, const char *mode) {
 	sigset_t saved;

@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
 
 # Verify normal operation...
 uid=`env -i id -u`

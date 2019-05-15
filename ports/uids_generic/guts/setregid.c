@@ -2,6 +2,8 @@
  * Copyright (c) 2008-2010 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static int
  * wrap_setregid(gid_t rgid, gid_t egid) {
  *	int rc = -1;

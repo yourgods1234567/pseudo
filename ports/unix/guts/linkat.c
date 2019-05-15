@@ -2,6 +2,8 @@
  * Copyright (c) 2012, 2013 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * int linkat(int olddirfd, const char *oldname, int newdirfd, const char *newname, int flags)
  *	int rc = -1;
  */

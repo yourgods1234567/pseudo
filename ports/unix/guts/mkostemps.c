@@ -5,6 +5,8 @@
  * Copyright (c) 2018 Peter Seebach; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * int mkostemps(char *template, int suffixlen, int oflags)
  *	int rc = -1;
  */

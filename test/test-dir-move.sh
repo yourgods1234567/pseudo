@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
 mkdir d1
 touch d1/f1
 mv d1 d2

@@ -5,6 +5,8 @@
  * [Note: copyright added by code generator, may be
  * incorrect. Remove this if you fix it.]
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags)
  *	int rc = -1;
  */

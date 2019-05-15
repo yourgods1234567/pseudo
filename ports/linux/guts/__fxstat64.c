@@ -2,6 +2,8 @@
  * Copyright (c) 2008-2010 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * int
  * wrap___fxstat64(int ver, int fd, struct stat64 *buf) {
  *	int rc = -1;

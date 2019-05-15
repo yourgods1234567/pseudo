@@ -1,3 +1,7 @@
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
+
 from string import Template
 import os
 

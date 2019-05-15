@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
 cat > execl_test.c << EOF
 #include <unistd.h>
 int main() {

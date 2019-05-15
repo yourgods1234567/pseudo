@@ -2,6 +2,8 @@
  * Copyright (c) 2012 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * FILE *popen(const char *command, const char *mode)
  *	FILE *rc = NULL;
  */

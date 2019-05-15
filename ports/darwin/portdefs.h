@@ -1,3 +1,7 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
+ */
 #define PRELINK_LIBRARIES "DYLD_INSERT_LIBRARIES"
 #define PRELINK_PATH "DYLD_LIBRARY_PATH"
 #define PSEUDO_STATBUF_64 0

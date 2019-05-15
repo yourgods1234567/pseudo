@@ -2,6 +2,8 @@
  * Copyright (c) 2011, 2012 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * int fcntl(int fd, int cmd, ... { struct flock *lock })
  *	int rc = -1;
  */

@@ -2,6 +2,8 @@
  * Copyright (c) 2016 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * int bind(int sockfd, const struct sockaddr *addr, socklen_t addrlen)
  *	int rc = -1;
  */

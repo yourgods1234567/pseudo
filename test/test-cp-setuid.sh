@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
 set -e
 
 # Verify that special bits (setuid/setgid/sticky) are preserved.

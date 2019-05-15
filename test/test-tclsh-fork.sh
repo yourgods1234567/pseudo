@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
 
 # Check that tclsh doesn't hang.  Note that the timeout is not needed to
 # reproduce the hang in tclsh, it's only there to ensure that this test script

@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
 
 env -i A=A B=B C=C env | grep -q "PSEUDO_"
 

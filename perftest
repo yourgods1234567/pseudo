@@ -1,4 +1,8 @@
 #!/bin/sh
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
+
 # do a quick performance test of pseudo
 opt_f=false
 flag_f=

@@ -2,6 +2,8 @@
  * Copyright (c) 2011 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * int execlp(const char *file, const char *arg, va_list ap)
  *	int rc = -1;
  */

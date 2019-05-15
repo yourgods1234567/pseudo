@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# SPDX-License-Identifier: LGPL-2.1-only
+#
 
 mode() {
 	ls -l "$1" | awk '{ print $1 }'

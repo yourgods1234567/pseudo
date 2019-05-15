@@ -2,6 +2,8 @@
  * Copyright (c) 2010 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static struct passwd *
  * wrap_getpwuid(uid_t uid) {
  *	struct passwd * rc = NULL;

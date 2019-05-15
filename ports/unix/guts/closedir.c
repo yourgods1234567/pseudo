@@ -2,6 +2,8 @@
  * Copyright (c) 2012 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static int
  * wrap_closedir(DIR *dirp) {
  *	int rc = -1;

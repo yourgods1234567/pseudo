@@ -1,3 +1,8 @@
+/*
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
+ */
+
 /* these aren't used, but the wrapper table isn't happy unless they
  * exist
  */

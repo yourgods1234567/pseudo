@@ -2,6 +2,8 @@
  * Copyright (c) 2008-2010, 2012, 2013 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static int
  * wrap_fchown(int fd, uid_t owner, gid_t group) {
  *	int rc = -1;

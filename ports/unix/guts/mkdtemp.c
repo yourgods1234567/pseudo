@@ -2,6 +2,8 @@
  * Copyright (c) 2010, 2012 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static char *
  * wrap_mkdtemp(char *template) {
  *	char * rc = NULL;

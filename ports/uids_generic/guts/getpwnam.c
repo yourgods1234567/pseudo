@@ -2,6 +2,8 @@
  * Copyright (c) 2010 Wind River Systems; see
  * guts/COPYRIGHT for information.
  *
+ * SPDX-License-Identifier: LGPL-2.1-only
+ *
  * static struct passwd *
  * wrap_getpwnam(const char *name) {
  *	struct passwd * rc = NULL;
