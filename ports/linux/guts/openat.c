@@ -55,9 +55,13 @@
 	if (flags & O_CREAT) {
 		save_errno = errno;
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
-		rc = real___xstat64(_STAT_VER, path, &buf);
+		if (flags & O_NOFOLLOW) {
+			rc = real___lxstat64(_STAT_VER, path, &buf);
+		} else {
+			rc = real___xstat64(_STAT_VER, path, &buf);
+		}
 #else
-		rc = real___fxstatat64(_STAT_VER, dirfd, path, &buf, 0);
+		rc = real___fxstatat64(_STAT_VER, dirfd, path, &buf, (flags & O_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0);
 #endif
 		existed = (rc != -1);
 		if (!existed)
@@ -72,9 +76,13 @@
 	if (!(flags & O_NONBLOCK) && ((flags & (O_WRONLY | O_RDONLY | O_RDWR)) != O_RDWR)) {
 		save_errno = errno;
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
-		rc = real___xstat64(_STAT_VER, path, &buf);
+		if (flags & O_NOFOLLOW) {
+			rc = real___lxstat64(_STAT_VER, path, &buf);
+		} else {
+			rc = real___xstat64(_STAT_VER, path, &buf);
+		}
 #else
-		rc = real___fxstatat64(_STAT_VER, dirfd, path, &buf, 0);
+		rc = real___fxstatat64(_STAT_VER, dirfd, path, &buf, (flags & O_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0);
 #endif
 		if (rc != -1 && S_ISFIFO(buf.st_mode)) {
 			overly_magic_nonblocking = 1;
@@ -126,11 +134,17 @@
 		}
 #endif
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
-		stat_rc = real___xstat64(_STAT_VER, path, &buf);
+		if (flags & O_NOFOLLOW) {
+			stat_rc = real___lxstat64(_STAT_VER, path, &buf);
+		} else {
+			stat_rc = real___xstat64(_STAT_VER, path, &buf);
+		}
 #else
-		stat_rc = real___fxstatat64(_STAT_VER, dirfd, path, &buf, 0);
+		stat_rc = real___fxstatat64(_STAT_VER, dirfd, path, &buf, (flags & O_NOFOLLOW) ? AT_SYMLINK_NOFOLLOW : 0);
 #endif
 
+		pseudo_debug(PDBGF_FILE, "openat(path %s), flags %o, stat rc %d, stat mode %o\n",
+			path, flags, stat_rc, buf.st_mode);
 		if (stat_rc != -1) {
 			buf.st_mode = PSEUDO_DB_MODE(buf.st_mode, mode);
 			if (!existed) {

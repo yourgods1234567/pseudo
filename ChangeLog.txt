@@ -1,3 +1,7 @@
+2019-08-02:
+	* (seebs) Pass flags & O_NOFOLLOW, also use that to influence
+	  stat types. Note. &. Not |.
+
 2019-08-01:
 	* (seebs) Pass flags|O_NOFOLLOW on when resolving paths with openat.
 
