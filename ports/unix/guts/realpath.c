@@ -14,7 +14,14 @@
 		errno = ENAMETOOLONG;
 		return NULL;
 	}
-	if ((len = strlen(rname)) >= pseudo_sys_path_max()) {
+		len = strlen(rname);
+		char *ep = rname + len - 1;
+		while (ep > rname && *ep == '/') {
+			--len;
+			*(ep--) = '\0';
+		}
+
+		if (len >= pseudo_sys_path_max()) {
 		errno = ENAMETOOLONG;
 		return NULL;
 	}
