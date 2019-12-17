@@ -29,11 +29,12 @@ fi
 if	$port_xattr; then
 	cat > dummy.c <<EOF
 #include <sys/types.h>
-#include <attr/xattr.h>
+#include <sys/xattr.h>
+#include <attr/attributes.h>
 int i;
 EOF
 	if ! ${CC} -c -o dummy.o dummy.c >/dev/null 2>&1; then
-		echo >&2 "Warning: Can't compile trivial program using <attr/xattr.h>".
+		echo >&2 "Warning: Can't compile trivial program using <attr/attributes.h>".
 		echo >&2 "         xattr support will require that header."
 	fi
 	echo "linux/xattr"
