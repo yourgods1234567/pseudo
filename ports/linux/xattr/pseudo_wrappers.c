@@ -197,7 +197,7 @@ static int shared_setxattr(const char *path, int fd, const char *name, const voi
 			mode |= get_special_bits(path, fd);
 			pseudo_debug(PDBGF_XATTR, "posix_acl_access translated to mode %04o. Remaining attribute(s): %d.\n",
 				mode, extra);
-			buf.st_mode = mode;
+
 			/* we want to actually issue a corresponding chmod,
 			 * as well, or else the file ends up 0600 on the
 			 * host. Using the slightly-less-efficient wrap_chmod
