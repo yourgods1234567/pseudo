@@ -1271,7 +1271,7 @@ pseudo_client_setup(void) {
 	}
 }
 
-#define PSEUDO_RETRIES 20
+#define PSEUDO_RETRIES 250
 static pseudo_msg_t *
 pseudo_client_request(pseudo_msg_t *msg, size_t len, const char *path) {
 	pseudo_msg_t *response = 0;
