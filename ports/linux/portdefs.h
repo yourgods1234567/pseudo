@@ -32,3 +32,5 @@ GLIBC_COMPAT_SYMBOL(memcpy,2.0);
 
 #include <linux/capability.h>
 #include <sys/syscall.h>
+#include <sys/prctl.h>
+#include <linux/seccomp.h>

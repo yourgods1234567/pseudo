@@ -57,6 +57,7 @@ int pseudo_capset(cap_user_header_t hdrp, const cap_user_data_t datap) {
 long
 syscall(long number, ...) {
 	long rc = -1;
+	va_list ap;
 
 	if (!pseudo_check_wrappers() || !real_syscall) {
 		/* rc was initialized to the "failure" value */
@@ -77,6 +78,20 @@ syscall(long number, ...) {
 	(void) number;
 #endif
 
+#ifdef SYS_seccomp
+	/* pseudo and seccomp are incompatible as pseudo uses different syscalls
+	 * so pretend to enable seccomp but really do nothing */
+	if (number == SYS_seccomp) {
+		unsigned long cmd;
+		va_start(ap, number);
+		cmd = va_arg(ap, unsigned long);
+		va_end(ap);
+		if (cmd == SECCOMP_SET_MODE_FILTER) {
+		    return 0;
+		}
+	}
+#endif
+
 	/* gcc magic to attempt to just pass these args to syscall. we have to
 	 * guess about the number of args; the docs discuss calling conventions
 	 * up to 7, so let's try that?
@@ -89,6 +104,47 @@ syscall(long number, ...) {
  */
 static long wrap_syscall(long nr, va_list ap) {
 	(void) nr;
+	(void) ap;
+	return -1;
+}
+
+int
+prctl(int option, ...) {
+	int rc = -1;
+	va_list ap;
+
+	if (!pseudo_check_wrappers() || !real_prctl) {
+		/* rc was initialized to the "failure" value */
+		pseudo_enosys("prctl");
+		return rc;
+	}
+
+#ifdef SECCOMP_SET_MODE_FILTER
+	/* pseudo and seccomp are incompatible as pseudo uses different syscalls
+	 * so pretend to enable seccomp but really do nothing */
+	if (option == PR_SET_SECCOMP) {
+		unsigned long cmd;
+		va_start(ap, option);
+		cmd = va_arg(ap, unsigned long);
+		va_end(ap);
+		if (cmd == SECCOMP_SET_MODE_FILTER) {
+		    return 0;
+		}
+	}
+#endif
+
+	/* gcc magic to attempt to just pass these args to prctl. we have to
+	 * guess about the number of args; the docs discuss calling conventions
+	 * up to 5, so let's try that?
+	 */
+	void *res = __builtin_apply((void (*)()) real_prctl, __builtin_apply_args(), sizeof(long) * 5);
+	__builtin_return(res);
+}
+
+/* unused.
+ */
+static int wrap_prctl(int option, va_list ap) {
+	(void) option;
 	(void) ap;
 	return -1;
 }
