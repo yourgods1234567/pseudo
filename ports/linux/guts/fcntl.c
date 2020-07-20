@@ -52,6 +52,11 @@
 	case F_GETLK:
 	case F_SETLK:
 	case F_SETLKW:
+#ifdef F_OFD_GETLK
+	case F_OFD_GETLK:
+	case F_OFD_SETLK:
+	case F_OFD_SETLKW:
+#endif
 		rc = real_fcntl(fd, cmd, lock);
 		break;
 #if defined(F_GETLK64) && (F_GETLK64 != F_GETLK)
