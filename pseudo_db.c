@@ -158,11 +158,24 @@ static struct sql_index {
 
 static char *file_pragmas[] = {
 	"PRAGMA legacy_file_format = OFF;",
-	"PRAGMA journal_mode = OFF;",
+#ifdef USE_MEMORY_DB
 	/* the default page size produces painfully bad behavior
 	 * for memory databases with some versions of sqlite.
 	 */
 	"PRAGMA page_size = 8192;",
+	"PRAGMA journal_mode = OFF;",
+#else
+        /* Use WAL mode when using the on-disk database. If user care about
+         * performance, they can use the in-memory database, but if they care
+         * more about resilience, they can disable it and WAL mode will prevent
+         * corruption of the on-disk database (for a slight performance
+         * penalty). Note that the database still keeps synchronous to OFF,
+         * meaning its resilient to the pseudo process crashing or being killed
+         * unexpectedly, but not to the OS crashing and losing buffered disk
+         * state
+         */
+	"PRAGMA journal_mode = WAL;",
+#endif
 	"PRAGMA locking_mode = EXCLUSIVE;",
 	/* Setting this to NORMAL makes pseudo noticably slower
 	 * than fakeroot, but is perhaps more secure.  However,
