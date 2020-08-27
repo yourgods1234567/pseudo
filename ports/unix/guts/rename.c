@@ -29,6 +29,14 @@
 	newrc = base_lstat(newpath, &newbuf);
 	oldrc = base_lstat(oldpath, &oldbuf);
 
+	/* nothing to do for a "rename" of a link to itself */
+	if (newrc != -1 && oldrc != -1 &&
+	    newbuf.st_dev == oldbuf.st_dev &&
+	    newbuf.st_ino == oldbuf.st_ino) {
+		pseudo_debug(PDBGF_OP, "rename: paths are the same\n");
+		return real_rename(oldpath, newpath);
+        }
+
 	errno = save_errno;
 
 	/* newpath must be removed. */
@@ -58,12 +66,6 @@
 		return rc;
 	}
 	save_errno = errno;
-	/* nothing to do for a "rename" of a link to itself */
-	if (newrc != -1 && oldrc != -1 &&
-	    newbuf.st_dev == oldbuf.st_dev &&
-	    newbuf.st_ino == oldbuf.st_ino) {
-		return rc;
-        }
 
 	/* rename(3) is not mv(1).  rename(file, dir) fails; you must provide
 	 * the corrected path yourself.  You can rename over a directory only
