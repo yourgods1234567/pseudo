@@ -116,6 +116,7 @@
 	 * if the thing linked is a symlink.
 	 */
 	pseudo_client_op(OP_LINK, 0, -1, -1, newpath, &buf);
+	pseudo_client_linked_paths(oldpath, newpath);
 
 	errno = save_errno;
 

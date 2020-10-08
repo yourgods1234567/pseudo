@@ -9,6 +9,7 @@
 extern pseudo_msg_t *pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path, const PSEUDO_STATBUF *buf, ...);
 extern int pseudo_client_ignore_path(const char *path);
 extern int pseudo_client_ignore_fd(int fd);
+extern void pseudo_client_linked_paths(const char *oldpath, const char *newpath);
 #if PSEUDO_STATBUF_64
 #define base_lstat real_lstat64
 #define base_fstat real_fstat64
