@@ -705,6 +705,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 						(unsigned long long) msg_header.ino,
 						path_by_ino ? path_by_ino : "no path",
 						msg->path);
+					found_ino = 0;
 				}
 			}
 		} else {
