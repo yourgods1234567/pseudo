@@ -695,17 +695,15 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 						msg->path);
 					pdb_did_unlink_file(path_by_ino, &by_ino, by_ino.deleting);
 				} else {
-					int flags = 0;
-					if (msg->nlink > 1) {
-						flags = PDBGF_FILE | PDBGF_VERBOSE;
-					}
-					pseudo_debug(flags, "path mismatch [%d link%s]: ino %llu db '%s' req '%s'.\n",
+					pseudo_diag("path mismatch [%d link%s]: ino %llu db '%s' req '%s'.\n",
 						msg->nlink,
 						msg->nlink == 1 ? "" : "s",
 						(unsigned long long) msg_header.ino,
 						path_by_ino ? path_by_ino : "no path",
 						msg->path);
 					found_ino = 0;
+					msg->result = RESULT_ABORT;
+					goto op_exit;
 				}
 			}
 		} else {
@@ -1025,6 +1023,7 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		break;
 	}
 
+op_exit:
 	/* in the case of an exact match, we just used the pointer
 	 * rather than allocating space.
 	 */

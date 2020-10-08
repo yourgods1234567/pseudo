@@ -1923,6 +1923,10 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 #endif
 		if (result) {
 			pseudo_debug(PDBGF_OP, "(%d) %s", getpid(), pseudo_res_name(result->result));
+			if (result->result == RESULT_ABORT) {
+				pseudo_diag("abort()ing pseudo client by server request. See https://wiki.yoctoproject.org/wiki/Pseudo_Abort for more details on this.\n");
+				abort();
+			}
 			if (op == OP_STAT || op == OP_FSTAT) {
 				pseudo_debug(PDBGF_OP, " mode 0%o uid %d:%d",
 					(int) result->mode,
