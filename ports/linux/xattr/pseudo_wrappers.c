@@ -134,7 +134,7 @@ static ssize_t shared_getxattr(const char *path, int fd, const char *name, void 
 	pseudo_debug(PDBGF_XATTR, "getxattr(%s [fd %d], %s)\n",
 		path ? path : "<no path>", fd, name);
 	pseudo_msg_t *result = pseudo_client_op(OP_GET_XATTR, 0, fd, -1, path, &buf, name);
-	if (result->result != RESULT_SUCCEED) {
+	if (!result || result->result != RESULT_SUCCEED) {
 		errno = ENOATTR;
 		return -1;
 	}
@@ -254,7 +254,7 @@ static int shared_setxattr(const char *path, int fd, const char *name, const voi
 static ssize_t shared_listxattr(const char *path, int fd, char *list, size_t size) {
 	RC_AND_BUF
 	pseudo_msg_t *result = pseudo_client_op(OP_LIST_XATTR, 0, fd, -1, path, &buf);
-	if (result->result != RESULT_SUCCEED) {
+	if (!result || result->result != RESULT_SUCCEED) {
 		pseudo_debug(PDBGF_XATTR, "listxattr: no success.\n");
 		errno = ENOATTR;
 		return -1;
@@ -276,7 +276,7 @@ static int shared_removexattr(const char *path, int fd, const char *name) {
 	RC_AND_BUF
 	pseudo_msg_t *result = pseudo_client_op(OP_REMOVE_XATTR, 0, fd, -1, path, &buf, name);
 
-	if (result->result != RESULT_SUCCEED) {
+	if (!result || result->result != RESULT_SUCCEED) {
 		/* docs say ENOATTR, but I don't have one */
 		errno = ENOENT;
 		return -1;
