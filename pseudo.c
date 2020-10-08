@@ -1023,6 +1023,21 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 		break;
 	}
 
+	switch (msg->op) {
+	case OP_FCHOWN:		/* FALLTHROUGH */
+	case OP_FCHMOD:		/* FALLTHROUGH */
+	case OP_FSTAT:
+		if (!found_path && !found_ino && (msg->nlink == 0)) {
+			/* If nlink is 0 for an fchown/fchmod/fstat, we probably have an fd which is 
+			 * unlinked and we don't want to do inode/path matching against it. Marking it 
+ 			 * as may unlink gives the right hints in the database to ensure we
+			 * handle correctly whilst maintaining the permissions whilst the 
+			 * file exists for the fd.  */
+			pdb_may_unlink_file(msg, msg->client);
+		}
+		break;
+	}
+
 op_exit:
 	/* in the case of an exact match, we just used the pointer
 	 * rather than allocating space.
