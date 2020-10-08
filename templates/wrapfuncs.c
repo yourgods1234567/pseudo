@@ -60,9 +60,15 @@ ${maybe_async_skip}
 		${rc_assign} (*real_${name})(${call_args});
 	} else {
 		${fix_paths}
-		/* exec*() use this to restore the sig mask */
-		pseudo_saved_sigmask = saved;
-		${rc_assign} wrap_$name(${call_args});
+		if (${ignore_paths}) {
+			/* call the real syscall */
+			pseudo_debug(PDBGF_SYSCALL, "${name} ignored path, calling real syscall.\n");
+			${rc_assign} (*real_${name})(${call_args});
+		} else {
+			/* exec*() use this to restore the sig mask */
+			pseudo_saved_sigmask = saved;
+			${rc_assign} wrap_$name(${call_args});
+		}
 	}
 	${variadic_end}
 	save_errno = errno;

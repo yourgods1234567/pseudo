@@ -1482,6 +1482,43 @@ base_path(int dirfd, const char *path, int leave_last) {
 	return newpath;
 }
 
+int pseudo_client_ignore_fd(int fd) {
+	if (fd >= 0 && fd <= nfds)
+		return pseudo_client_ignore_path(fd_path(fd));
+	return 0;
+}
+
+int pseudo_client_ignore_path_chroot(const char *path, int ignore_chroot) {
+	char *env;
+	if (path) {
+		if (ignore_chroot && pseudo_chroot && strncmp(path, pseudo_chroot, pseudo_chroot_len) == 0)
+			return 0;
+		env = pseudo_get_value("PSEUDO_IGNORE_PATHS");
+		if (env) {
+			char *p = env;
+        	        while (*p) {
+				char *next = strchr(p, ',');
+				if (!next)
+				    next = strchr(p, '\0');
+				if ((next - p) && !strncmp(path, p, next - p)) {
+		 			pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "ignoring path: '%s'\n", path);
+					return 1;
+				}
+				if (next && *next != '\0')
+					p = next+1;
+				else
+					break;
+			}
+			free(env);
+		}
+	}
+	return 0;
+}
+
+int pseudo_client_ignore_path(const char *path) {
+	return pseudo_client_ignore_path_chroot(path, 1);
+}
+
 pseudo_msg_t *
 pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path, const PSEUDO_STATBUF *buf, ...) {
 	pseudo_msg_t *result = 0;
@@ -1520,6 +1557,16 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		} else {
 			pathlen = strlen(path) + 1;
 		}
+	}
+
+	if (op != OP_CHROOT && op != OP_CHDIR && op != OP_CLOSE && op != OP_DUP
+			&& pseudo_client_ignore_path_chroot(path, 0)) {
+		if (op == OP_OPEN) {
+			pseudo_client_path(fd, path);
+		}
+		/* reenable wrappers */
+		pseudo_magic();
+		return result;
 	}
 
 #ifdef PSEUDO_XATTRDB

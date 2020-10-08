@@ -228,6 +228,8 @@ class Function:
         self.real_func = None
         self.paths_to_munge = []
         self.specific_dirfds = {}
+        self.fd_arg = False
+        self.noignore_path = False
         self.hand_wrapped = None
         self.async_skip = None
         # used for the copyright date when creating stub functions
@@ -267,6 +269,11 @@ class Function:
                 self.flags = '(flags & AT_SYMLINK_NOFOLLOW)'
             elif arg.name.endswith('path'):
                 self.paths_to_munge.append(arg.name)
+            elif arg.name == 'fd':
+                self.fd_arg = "fd"
+            elif arg.name == 'filedes':
+                self.fd_arg = "filedes"
+
     
         # pick default values
         if self.type == 'void':
@@ -360,6 +367,25 @@ class Function:
                 "%s = pseudo_root_path(__func__, __LINE__, %s%s, %s, %s);" %
                 (path, prefix, self.dirfd, path, self.flags))
         return "\n\t\t".join(fix_paths)
+
+    def ignore_paths(self):
+        if self.noignore_path:
+            return "0"
+
+        mainpath = None
+        if "oldpath" in self.paths_to_munge:
+            mainpath = "oldpath"
+        elif "newpath" in self.paths_to_munge:
+            mainpath = "newpath"
+        elif "path" in self.paths_to_munge:
+            mainpath = "path"
+
+        if mainpath:
+            return "pseudo_client_ignore_path(%s)" % mainpath
+        if self.fd_arg:
+            return "pseudo_client_ignore_fd(%s)" % self.fd_arg
+
+        return "0"
 
     def real_predecl(self):
         if self.real_func:
