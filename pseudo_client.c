@@ -1527,28 +1527,33 @@ int pseudo_client_ignore_fd(int fd) {
 
 int pseudo_client_ignore_path_chroot(const char *path, int ignore_chroot) {
 	char *env;
-	if (path) {
-		if (ignore_chroot && pseudo_chroot && strncmp(path, pseudo_chroot, pseudo_chroot_len) == 0)
-			return 0;
-		env = pseudo_get_value("PSEUDO_IGNORE_PATHS");
-		if (env) {
-			char *p = env;
-        	        while (*p) {
-				char *next = strchr(p, ',');
-				if (!next)
-				    next = strchr(p, '\0');
-				if ((next - p) && !strncmp(path, p, next - p)) {
-		 			pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "ignoring path: '%s'\n", path);
-					return 1;
-				}
-				if (next && *next != '\0')
-					p = next+1;
-				else
-					break;
-			}
-			free(env);
+
+	if (!path)
+		return 0;
+
+	if (ignore_chroot && pseudo_chroot && strncmp(path, pseudo_chroot, pseudo_chroot_len) == 0)
+		return 0;
+
+	env = pseudo_get_value("PSEUDO_IGNORE_PATHS");
+	if (!env)
+		return 0;
+
+	char *p = env;
+	while (*p) {
+		char *next = strchr(p, ',');
+		if (!next)
+			next = strchr(p, '\0');
+		if ((next - p) && !strncmp(path, p, next - p)) {
+ 			pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE, "ignoring path: '%s'\n", path);
+			return 1;
 		}
+		if (next && *next != '\0')
+			p = next+1;
+		else
+			break;
 	}
+	free(env);
+
 	return 0;
 }
 
