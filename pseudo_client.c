@@ -1965,7 +1965,9 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		if (result) {
 			pseudo_debug(PDBGF_OP, "(%d) %s", getpid(), pseudo_res_name(result->result));
 			if (result->result == RESULT_ABORT) {
-				pseudo_diag("abort()ing pseudo client by server request. See https://wiki.yoctoproject.org/wiki/Pseudo_Abort for more details on this.\n");
+				char *local_state_dir = pseudo_get_value("PSEUDO_LOCALSTATEDIR");
+				pseudo_diag("abort()ing pseudo client by server request. See https://wiki.yoctoproject.org/wiki/Pseudo_Abort for more details on this.\n"
+					"Check logfile: %s/%s\n", local_state_dir, PSEUDO_LOGFILE);
 				abort();
 			}
 			if (op == OP_STAT || op == OP_FSTAT) {
