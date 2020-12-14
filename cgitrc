@@ -1,2 +1,3 @@
-desc=Allows emulation of root user operationssection=-Yocto Tools
+desc=Allows emulation of root user operations
+section=-Yocto Tools
 hide=0
