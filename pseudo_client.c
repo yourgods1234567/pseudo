@@ -431,6 +431,7 @@ pseudo_profile_report(void) {
 void
 pseudo_init_client(void) {
 	char *env;
+	int need_free = 0;
 
 	pseudo_antimagic();
 	pseudo_new_pid();
@@ -450,9 +451,11 @@ pseudo_init_client(void) {
 	 * or it may have gone away, in which case we'd enable
 	 * pseudo (and cause it to reinit the defaults).
 	 */
+	need_free = 0;
 	env = getenv("PSEUDO_DISABLED");
 	if (!env) {
 		env = pseudo_get_value("PSEUDO_DISABLED");
+		need_free = 1;
 	}
 	if (env) {
 		int actually_disabled = 1;
@@ -487,15 +490,19 @@ pseudo_init_client(void) {
 	} else {
 		pseudo_set_value("PSEUDO_DISABLED", "0");
 	}
+	if (need_free)
+		free(env);
 
 	/* ALLOW_FSYNC is here because some crazy hosts will otherwise
 	 * report incorrect values for st_size/st_blocks. I can sort of
 	 * understand st_blocks, but bogus values for st_size? Not cool,
 	 * dudes, not cool.
 	 */
+	need_free = 0;
 	env = getenv("PSEUDO_ALLOW_FSYNC");
 	if (!env) {
 		env = pseudo_get_value("PSEUDO_ALLOW_FSYNC");
+		need_free = 1;
 	} else {
 		pseudo_set_value("PSEUDO_ALLOW_FSYNC", env);
 	}
@@ -504,6 +511,8 @@ pseudo_init_client(void) {
 	} else {
 		pseudo_allow_fsync = 0;
 	}
+	if (need_free)
+		free(env);
 
 	/* in child processes, PSEUDO_UNLOAD may become set to
 	 * some truthy value, in which case we're being asked to

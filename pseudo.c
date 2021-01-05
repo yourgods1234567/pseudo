@@ -245,10 +245,12 @@ main(int argc, char *argv[]) {
 	/* Options are processed, preserve them... */
 	pseudo_set_value("PSEUDO_OPTS", opts);
 
-	if (!pseudo_get_prefix(argv[0])) {
+	s = pseudo_get_prefix(argv[0]);
+	if (!s) {
 		pseudo_diag("Can't figure out prefix.  Set PSEUDO_PREFIX or invoke with full path.\n");
 		exit(PSEUDO_EXIT_PSEUDO_PREFIX);
 	}
+	free(s);
 
 	/* move database */
 	if (opt_m || opt_M) {
