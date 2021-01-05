@@ -26,6 +26,12 @@ ${name}(${decl_args}) {
 
 ${maybe_async_skip}
 
+	pseudo_debug(PDBGF_WRAPPER, "entry point $name wrapper=%p real=%p\n", &wrap_$name, real_$name);
+	if (&wrap_$name == real_$name) {
+		pseudo_debug(PDBGF_WRAPPER, "wrap_$name is the same as real_$name\n");
+		abort();
+	}
+
 	if (!pseudo_check_wrappers() || !real_$name) {
 		/* rc was initialized to the "failure" value */
 		pseudo_enosys("${name}");
@@ -36,13 +42,13 @@ ${maybe_async_skip}
 	${variadic_start}
 
 	if (pseudo_disabled) {
+		pseudo_debug(PDBGF_SYSCALL, "pseudo disabled, ${name} calling real syscall %p.\n", *real_$name);
 		${rc_assign} (*real_${name})(${call_args});
 		${variadic_end}
 		PROFILE_DONE;
 		${rc_return}
 	}
 
-	pseudo_debug(PDBGF_WRAPPER, "wrapper called: ${name}\n");
 	pseudo_sigblock(&saved);
 	pseudo_debug(PDBGF_WRAPPER | PDBGF_VERBOSE, "${name} - signals blocked, obtaining lock\n");
 	if (pseudo_getlock()) {
@@ -56,13 +62,13 @@ ${maybe_async_skip}
 	int save_errno;
 	if (antimagic > 0) {
 		/* call the real syscall */
-		pseudo_debug(PDBGF_SYSCALL, "${name} calling real syscall.\n");
+		pseudo_debug(PDBGF_SYSCALL, "${name} calling real syscall %p.\n", *real_$name);
 		${rc_assign} (*real_${name})(${call_args});
 	} else {
 		${fix_paths}
 		if (${ignore_paths}) {
 			/* call the real syscall */
-			pseudo_debug(PDBGF_SYSCALL, "${name} ignored path, calling real syscall.\n");
+			pseudo_debug(PDBGF_SYSCALL, "${name} ignored path, calling real syscall %p.\n", *real_$name);
 			${rc_assign} (*real_${name})(${call_args});
 		} else {
 			/* exec*() use this to restore the sig mask */
