@@ -159,7 +159,7 @@ pseudo_get_value(const char *key) {
 	if (pseudo_util_initted == -1)
 		pseudo_init_util();
 
-	for (i = 0; pseudo_env[i].key && memcmp(pseudo_env[i].key, key, pseudo_env[i].key_len + 1); i++)
+	for (i = 0; pseudo_env[i].key && strcmp(pseudo_env[i].key, key); i++)
 		;
 
 	/* Check if the environment has it and we don't ...
@@ -188,7 +188,7 @@ pseudo_set_value(const char *key, const char *value) {
 	if (pseudo_util_initted == -1)
 		pseudo_init_util();
 
-	for (i = 0; pseudo_env[i].key && memcmp(pseudo_env[i].key, key, pseudo_env[i].key_len + 1); i++)
+	for (i = 0; pseudo_env[i].key && strcmp(pseudo_env[i].key, key); i++)
 		;
 
 	if (pseudo_env[i].key) {
