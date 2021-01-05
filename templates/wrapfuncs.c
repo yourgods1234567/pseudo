@@ -36,6 +36,7 @@ ${maybe_async_skip}
 	${variadic_start}
 
 	if (pseudo_disabled) {
+		pseudo_debug(PDBGF_SYSCALL, "pseudo disabled, ${name} calling real syscall.\n");
 		${rc_assign} (*real_${name})(${call_args});
 		${variadic_end}
 		PROFILE_DONE;

@@ -125,6 +125,7 @@ pseudo_reinit_libpseudo(void) {
 static void
 pseudo_init_one_wrapper(pseudo_function *func) {
 	int (*f)(void) = (int (*)(void)) NULL;
+	Dl_info info;
 
 	if (*func->real != NULL) {
 		/* already initialized */
@@ -146,6 +147,8 @@ pseudo_init_one_wrapper(pseudo_function *func) {
 	 * errors if a function is missing, and that printing output
 	 * for these seems unhelpful. so we no longer do that.
 	 */
+	dladdr(f, &info);
+	pseudo_debug(PDBGF_WRAPPER, "dlsym(%s, %s) from %s\n", func->name, func->version, info.dli_fname);
 }
 
 void
