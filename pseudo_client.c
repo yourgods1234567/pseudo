@@ -1860,7 +1860,8 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		break;
 	case OP_OPEN:
 		pseudo_client_path(fd, path);
-	case OP_EXEC: /* fallthrough */
+		/* fallthrough */
+	case OP_EXEC:
 		do_request = pseudo_client_logging;
 		break;
 	case OP_CLOSE:

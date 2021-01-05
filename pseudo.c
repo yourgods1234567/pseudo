@@ -1036,6 +1036,8 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 			pdb_may_unlink_file(msg, msg->client);
 		}
 		break;
+	default:
+		break;
 	}
 
 op_exit:
