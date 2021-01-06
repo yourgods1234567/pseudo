@@ -11,16 +11,16 @@
 	PSEUDO_STATBUF buf;
 	int save_errno = errno;
 
-	if (flags & AT_SYMLINK_NOFOLLOW) {
-		errno = ENOTSUP;
-		return -1;
-	}
 #ifdef PSEUDO_NO_REAL_AT_FUNCTIONS
 	if (dirfd != AT_FDCWD) {
 		errno = ENOSYS;
 		return -1;
 	}
-	rc = base_stat(path, &buf);
+	if (flags & AT_SYMLINK_NOFOLLOW) {
+	    rc = base_lstat(path, &buf);
+	} else {
+	    rc = base_stat(path, &buf);
+	}
 #else
 	rc = base_fstatat(dirfd, path, &buf, flags);
 #endif
