@@ -593,7 +593,7 @@ def process_wrapfuncs(port):
             func.directory = directory
             funcs[func.name] = func
             sys.stdout.write(".")
-        except Exception(e):
+        except Exception as e:
             print("Parsing failed:", e)
             exit(1)
     funclist.close()
