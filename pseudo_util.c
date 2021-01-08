@@ -967,6 +967,7 @@ pseudo_setupenv() {
 		}
 		snprintf(newenv, len, "%s:%s64", libdir_path, libdir_path);
 		SETENV(PRELINK_PATH, newenv, 1);
+		free(newenv);
 	} else if (!strstr(ld_library_path, libdir_path)) {
 		size_t len = strlen(ld_library_path) + 1 + strlen(libdir_path) + 1 + (strlen(libdir_path) + 2) + 1;
 		char *newenv = malloc(len);
@@ -975,6 +976,7 @@ pseudo_setupenv() {
 		}
 		snprintf(newenv, len, "%s:%s:%s64", ld_library_path, libdir_path, libdir_path);
 		SETENV(PRELINK_PATH, newenv, 1);
+		free(newenv);
 	} else {
 		/* nothing to do, ld_library_path exists and contains
 		 * our preferred path */
