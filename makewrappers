@@ -11,6 +11,7 @@ import glob
 import sys
 import re
 import os.path
+import platform
 import string
 import subprocess
 from templatefile import TemplateFile
@@ -290,10 +291,18 @@ class Function:
 
         # handle special comments, such as flags=AT_SYMLINK_NOFOLLOW
         if self.comments:
-            modifiers = self.comments.split(', ')
-            for mod in modifiers:
-                key, value = mod.split('=')
-                value = value.rstrip()
+            # Build a dictionary of key=value, key=value pairs
+            modifiers = dict(mod.split("=") for mod in self.comments.split(','))
+            # Strip all leading/trailing whitespace
+            modifiers = {k.strip():v.strip() for k, v in modifiers.items()}
+
+            arch = "-" + platform.machine()
+            # Sorted so that versions-foo appear after versions, so overrides are easy
+            for key in sorted(modifiers):
+                value = modifiers[key]
+                # If the key is version-arm64 and we're on arm64 then rename this to version
+                if key.endswith(arch):
+                    key = key.replace(arch, "")
                 setattr(self, key, value)
     
     def maybe_inode64(self):
