@@ -833,6 +833,8 @@ pseudo_client_chroot(const char *path) {
 	}
 	memcpy(pseudo_chroot, path, pseudo_chroot_len + 1);
 	pseudo_set_value("PSEUDO_CHROOT", pseudo_chroot);
+	/* Rebuild passwd paths since we've done a chroot */
+	build_passwd_paths();
 	return 0;
 }
 
