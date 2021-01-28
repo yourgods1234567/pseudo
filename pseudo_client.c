@@ -944,6 +944,21 @@ pseudo_client_linked_paths(const char *oldpath, const char *newpath) {
 }
 
 static void
+pseudo_client_rename_path(const char *oldpath, const char *newpath) {
+	int fd;
+	for (fd = 3; fd < nfds; ++fd) {
+		if (fd_paths[fd] && !strcmp(oldpath, fd_paths[fd])) {
+                        pseudo_client_path(fd, newpath);
+		}
+	}
+	for (fd = 0; fd < linked_nfds; ++fd) {
+		if (linked_fd_paths[fd] && fd_paths[fd] && !strcmp(oldpath, linked_fd_paths[fd])) {
+			pseudo_client_path_set(fd, newpath, &linked_fd_paths, &linked_nfds);
+		}
+	}
+}
+
+static void
 pseudo_client_unlinked_path(const char *path) {
 	int fd;
 	for (fd = 0; fd < linked_nfds; ++fd) {
@@ -1939,7 +1954,6 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	case OP_FCHOWN:
 	case OP_FSTAT:
 	case OP_LINK:
-	case OP_RENAME:
 	case OP_STAT:
 	case OP_CANCEL_UNLINK:
 	case OP_MAY_UNLINK:
@@ -1947,6 +1961,10 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	case OP_LIST_XATTR:
 	case OP_SET_XATTR:
 	case OP_REMOVE_XATTR:
+		do_request = 1;
+		break;
+	case OP_RENAME:
+		pseudo_client_rename_path(path_extra_1, path);
 		do_request = 1;
 		break;
 	default:
