@@ -10,6 +10,8 @@ int dup(int fd); /* noignore_path=1 */
 int chdir(const char *path); /* noignore_path=1 */
 int fchdir(int dirfd); /* noignore_path=1 */
 int access(const char *path, int mode);
+int faccessat(int dirfd, const char *path, int mode, int flags);
+int faccessat2(int dirfd, const char *path, int mode, int flags);
 FTS *fts_open(char * const *path_argv, int options, int (*compar)(const FTSENT **, const FTSENT **)); /* inode64=1 */
 int ftw(const char *path, int (*fn)(const char *, const struct stat *, int), int nopenfd);
 int nftw(const char *path, int (*fn)(const char *, const struct stat *, int, struct FTW *), int nopenfd, int flag);
