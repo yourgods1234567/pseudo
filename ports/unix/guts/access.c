@@ -21,7 +21,7 @@
 		if (buf.st_mode & 0111) {
 			return 0;
 		} else {
-			errno = EPERM;
+			errno = EACCES;
 			return -1;
 		}
 	} else {
