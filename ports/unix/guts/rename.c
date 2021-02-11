@@ -13,7 +13,8 @@
 	int oldrc, newrc;
 	int save_errno;
 	int old_db_entry = 0;
-	int may_unlinked = 0;
+	int may_unlink_new = 0;
+	int may_unlink_old = 0;
 
 	pseudo_debug(PDBGF_OP, "rename: %s->%s\n",
 		oldpath ? oldpath : "<nil>",
@@ -43,28 +44,36 @@
 	/* as with unlink, we have to mark that the file may get deleted */
 	msg = pseudo_client_op(OP_MAY_UNLINK, 0, -1, -1, newpath, newrc ? NULL : &newbuf);
 	if (msg && msg->result == RESULT_SUCCEED)
-		may_unlinked = 1;
+		may_unlink_new = 1;
+        /* oldpath is also likely to disappear. Something could call stat() after 
+           real_rename so we need to mark as MAY_UNLINK too */
+	msg = pseudo_client_op(OP_MAY_UNLINK, 0, -1, -1, oldpath, oldrc ? NULL : &oldbuf);
+	if (msg && msg->result == RESULT_SUCCEED)
+		may_unlink_old = 1;
+
 	msg = pseudo_client_op(OP_STAT, 0, -1, -1, oldpath, oldrc ? NULL : &oldbuf);
 	if (msg && msg->result == RESULT_SUCCEED)
 		old_db_entry = 1;
 	rc = real_rename(oldpath, newpath);
 	save_errno = errno;
-	if (may_unlinked) {
-		if (rc == -1) {
-			/* since we failed, that wasn't really unlinked -- put
-			 * it back.
-			 */
-			pseudo_client_op(OP_CANCEL_UNLINK, 0, -1, -1, newpath, &newbuf);
-		} else {
-			/* confirm that the file was removed */
-			pseudo_client_op(OP_DID_UNLINK, 0, -1, -1, newpath, &newbuf);
-		}
-	}
+
 	if (rc == -1) {
+		/* since we failed, that wasn't really unlinked -- put
+		 * it back.
+		 */
+		if (may_unlink_new)
+			pseudo_client_op(OP_CANCEL_UNLINK, 0, -1, -1, newpath, &newbuf);
+		if (may_unlink_old)
+			pseudo_client_op(OP_CANCEL_UNLINK, 0, -1, -1, oldpath, &oldbuf);
 		/* and we're done. */
 		errno = save_errno;
 		return rc;
 	}
+
+	/* confirm that the file was removed */
+	if (may_unlink_new)	
+		pseudo_client_op(OP_DID_UNLINK, 0, -1, -1, newpath, &newbuf);
+	/* OP_DID_UNLINK for oldpath is handled by the server */
 	save_errno = errno;
 
 	/* rename(3) is not mv(1).  rename(file, dir) fails; you must provide

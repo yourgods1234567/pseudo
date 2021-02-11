@@ -688,14 +688,13 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 				break;
 			}
 			if (mismatch) {
-				/* a mismatch, but we were planning to delete
-				 * the file, so it must have gotten deleted
-				 * already.
-				 */
 				if (by_ino.deleting != 0) {
-					pseudo_debug(PDBGF_FILE, "inode mismatch for '%s' -- old one was marked for deletion, deleting.\n",
+					/* a mismatch, likely a race but we were planning to
+					 * delete the file, or are in the middle of a rename
+					 * so continue, need the old entry for a rename.
+					 */
+					pseudo_debug(PDBGF_FILE, "inode mismatch for '%s' -- old one was marked for deletion.\n",
 						msg->path);
-					pdb_did_unlink_file(path_by_ino, &by_ino, by_ino.deleting);
 				} else {
 					pseudo_diag("path mismatch [%d link%s]: ino %llu db '%s' req '%s'.\n",
 						msg->nlink,

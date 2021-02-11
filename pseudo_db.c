@@ -2020,8 +2020,8 @@ int
 pdb_rename_file(const char *oldpath, pseudo_msg_t *msg) {
 	static sqlite3_stmt *update_exact, *update_sub;
 	int rc;
-	char *sql_update_exact = "UPDATE files SET path = ? WHERE path = ?;";
-	char *sql_update_sub = "UPDATE files SET path = replace(path, ?, ?) "
+	char *sql_update_exact = "UPDATE files SET path = ?, deleting = 0 WHERE path = ?;";
+	char *sql_update_sub = "UPDATE files SET path = replace(path, ?, ?), deleting = 0 "
 			       "WHERE (path > (? || '/') AND path < (? || '0'));";
 
 	if (!file_db && get_dbs()) {
