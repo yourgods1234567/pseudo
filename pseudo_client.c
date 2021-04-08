@@ -1629,7 +1629,16 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	if (op != OP_CHROOT && op != OP_CHDIR && op != OP_CLOSE && op != OP_DUP
 			&& pseudo_client_ignore_path_chroot(path, 0)) {
 		if (op == OP_OPEN) {
-			pseudo_client_path(fd, path);
+			/* Sanitise the path to have no trailing slash as this is convention in the database */
+			char *stripped_path;
+			pathlen = strlen(path);
+			if (pathlen > 2 && (path[pathlen - 1]) == '/') {
+				stripped_path = strndup(path, pathlen-1);
+				pseudo_client_path(fd, stripped_path);
+				free(stripped_path);
+			} else {
+				pseudo_client_path(fd, path);
+			}
 		}
 		/* reenable wrappers */
 		pseudo_magic();
