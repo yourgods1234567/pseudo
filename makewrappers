@@ -375,8 +375,12 @@ class Function:
             if self.dirfd != "AT_FDCWD" and "flags" in self.flags \
                     and "AT_SYMLINK_NOFOLLOW" in self.flags:
                 fix_paths.append(
+                    # Reference the variable inside a noop inline-asm to stop
+                    # the compiler from eliminating the null pointer check
+                    # on parameters marked nonnull
+                    "asm(\"\" : \"+r\"(%s));"
                     "if (%s && !*%s && (flags & AT_EMPTY_PATH))\n"
-                    "\t\t\tflags |= AT_SYMLINK_NOFOLLOW;" % (path, path))
+                    "\t\t\tflags |= AT_SYMLINK_NOFOLLOW;" % (path, path, path))
             fix_paths.append(
                 "%s = pseudo_root_path(__func__, __LINE__, %s%s, %s, %s);" %
                 (path, prefix, self.dirfd, path, self.flags))
