@@ -140,7 +140,7 @@ pseudo_init_one_wrapper(pseudo_function *func) {
 #endif
 	f = dlsym(RTLD_NEXT, func->name);
 	if (f) {
-		*func->real = f;
+		*func->real = (void (*)(void)) f;
 	}
 	/* it turns out that in some cases, we get apparently-harmless
 	 * errors if a function is missing, and that printing output

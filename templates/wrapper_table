@@ -6,8 +6,8 @@
  * script if you want to modify this. */
 typedef struct {
 	char *name;		/* the name */
-	int (**real)(void);	/* the underlying syscall */
-	int (*wrapper)(void);	/* the wrapper from guts/name.c */
+	void (**real)(void);	/* the underlying syscall */
+	void (*wrapper)(void);	/* the wrapper from guts/name.c */
 	char *version;		/* the version, if we know and care */
 } pseudo_function;
 
@@ -15,8 +15,8 @@ static pseudo_function pseudo_functions[] = {
 @body
 	{ /* ${comment}; */
 		"${name}${maybe_inode64}",
-		(int (**)(void)) &real_${name},
-		(int (*)(void)) wrap_${name},
+		(void (**)(void)) &real_${name},
+		(void (*)(void)) wrap_${name},
 		${version}
 	},
 @footer

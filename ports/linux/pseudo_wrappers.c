@@ -96,7 +96,7 @@ syscall(long number, ...) {
 	 * guess about the number of args; the docs discuss calling conventions
 	 * up to 7, so let's try that?
 	 */
-	void *res = __builtin_apply((void (*)()) real_syscall, __builtin_apply_args(), sizeof(long) * 7);
+	void *res = __builtin_apply((void (*)(void)) real_syscall, __builtin_apply_args(), sizeof(long) * 7);
 	__builtin_return(res);
 }
 
@@ -137,7 +137,7 @@ prctl(int option, ...) {
 	 * guess about the number of args; the docs discuss calling conventions
 	 * up to 5, so let's try that?
 	 */
-	void *res = __builtin_apply((void (*)()) real_prctl, __builtin_apply_args(), sizeof(long) * 5);
+	void *res = __builtin_apply((void (*)(void)) real_prctl, __builtin_apply_args(), sizeof(long) * 5);
 	__builtin_return(res);
 }
 
