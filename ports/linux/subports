@@ -55,12 +55,17 @@ else
 fi
 rm -f dummy.c dummy.o
 
+# For statx, we want a pseudo which can work with OE's uninative, i.e. build on a system without
+# statx but work on one with it. We have a header in nostatx to allow this.
 cat > dummy.c <<EOF
 #define _GNU_SOURCE
 #include <sys/stat.h>
 struct statx x;
 EOF
 if ${CC} -c -o dummy.o dummy.c >/dev/null 2>&1; then
+	echo "linux/statx"
+else
+	echo "linux/nostatx"
 	echo "linux/statx"
 fi
 rm -f dummy.c dummy.o
