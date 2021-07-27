@@ -846,7 +846,7 @@ pseudo_root_path(const char *func, int line, int dirfd, const char *path, int le
 	pseudo_magic();
 	if (!rc) {
 		pseudo_diag("couldn't allocate absolute path for '%s'.\n",
-			path);
+			path ? path : "null");
 	}
 	pseudo_debug(PDBGF_CHROOT, "root_path [%s, %d]: '%s' from '%s'\n",
 		func, line,
