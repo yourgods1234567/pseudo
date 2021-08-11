@@ -25,11 +25,13 @@ int main () {
     int fd, dir_fd;
     struct stat st;
     ino_t ino;
+    dev_t dev;
     char *path;
 
     fd = openat(AT_FDCWD, ".", O_DIRECTORY, 0);
     fstat(fd, &st);
     ino = st.st_ino;
+    dev = st.st_dev;
 
     while (1) {
         path = path_of(fd);
@@ -37,7 +39,7 @@ int main () {
 
         dir_fd = openat(fd, "../", O_DIRECTORY, 0);
         fstat(dir_fd, &st);
-        if (st.st_ino == ino) {
+        if (st.st_ino == ino && st.st_dev == dev) {
             if (strcmp(path, "/") == 0) {
                 //puts("Reached top of tree");
                 return 0;
@@ -49,6 +51,7 @@ int main () {
 
         free (path);
         ino = st.st_ino;
+        dev = st.st_dev;
         fd = dir_fd;
     }
     return 0;
