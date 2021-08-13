@@ -79,6 +79,7 @@ test: all | $(BIN) $(LIB) $(LOCALSTATE)
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-openat test/test-openat.c
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-statx test/test-statx.c
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-fstat test/test-fstat.c
+	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-fcntl test/test-fcntl.c
 	@./run_tests.sh -v
 
 install-lib: $(LIBPSEUDO)

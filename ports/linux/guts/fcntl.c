@@ -8,6 +8,22 @@
  * wrap_fcntl(int fd, int cmd, ...struct flock *lock) {
  *	int rc = -1;
  */
+#if !defined(F_GETPIPE_SZ)
+#define F_GETPIPE_SZ (1032)
+#endif
+
+#if F_GETPIPE_SZ != 1032
+#error System F_GETPIPE_SZ has unexpected value
+#endif
+
+#if !defined(F_SETPIPE_SZ)
+#define F_SETPIPE_SZ (1031)
+#endif
+
+#if F_SETPIPE_SZ != 1031
+#error System F_SETPIPE_SZ has unexpected value
+#endif
+
  	long arg;
 	int save_errno;
 
@@ -31,12 +47,17 @@
 		}
 		errno = save_errno;
 		break;
+	case F_SETPIPE_SZ:
+		/* actually do something */
+		rc = real_fcntl(fd, cmd, arg);
+		break;
 	/* no argument: */
 	case F_GETFD:
 	case F_GETFL:
 	case F_GETOWN:
 	case F_GETSIG:
 	case F_GETLEASE:
+	case F_GETPIPE_SZ:
 		rc = real_fcntl(fd, cmd);
 		break;
 	/* long argument */
