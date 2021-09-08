@@ -1589,7 +1589,8 @@ int pseudo_client_ignore_path(const char *path) {
 pseudo_msg_t *
 pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path, const PSEUDO_STATBUF *buf, ...) {
 	pseudo_msg_t *result = 0;
-	pseudo_msg_t msg = { .type = PSEUDO_MSG_OP };
+	static pseudo_msg_t msg;
+	msg = (pseudo_msg_t) { .type = PSEUDO_MSG_OP };
 	size_t pathlen = -1;
 	int do_request = 0;
 	char *path_extra_1 = 0;
