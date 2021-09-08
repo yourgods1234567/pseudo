@@ -62,3 +62,4 @@ long syscall(long nr, ...); /* hand_wrapped=1 */
 int renameat2(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, unsigned int flags); /* flags=AT_SYMLINK_NOFOLLOW */
 int prctl(int option, ...); /* hand_wrapped=1 */
 int close_range(unsigned int lowfd, unsigned int maxfd, int flags);
+void closefrom(int fd);

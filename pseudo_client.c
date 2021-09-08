@@ -983,6 +983,23 @@ pseudo_client_close(int fd) {
 	}
 }
 
+static void
+pseudo_client_closefrom(int fd) {
+	int i;
+	if (fd < 0 || fd >= nfds)
+		return;
+
+	for (i = fd; i < nfds; ++i) {
+		free(fd_paths[i]);
+		fd_paths[i] = 0;
+
+		if (i < linked_nfds) {
+			free(linked_fd_paths[i]);
+			linked_fd_paths[i] = 0;
+		}
+	}
+}
+
 /* spawn server */
 static int
 client_spawn_server(void) {
@@ -1600,6 +1617,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	static char *alloced_path = 0;
 	static size_t alloced_len = 0;
 	int strip_slash;
+	int startfd, i;
 
 #ifdef PSEUDO_PROFILING
 	struct timeval tv1_op, tv2_op;
@@ -1627,7 +1645,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		}
 	}
 
-	if (op != OP_CHROOT && op != OP_CHDIR && op != OP_CLOSE && op != OP_DUP
+	if (op != OP_CHROOT && op != OP_CHDIR && op != OP_CLOSE && op != OP_CLOSEFROM && op != OP_DUP
 			&& pseudo_client_ignore_path_chroot(path, 0)) {
 		if (op == OP_OPEN) {
 			/* Sanitise the path to have no trailing slash as this is convention in the database */
@@ -1900,6 +1918,32 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 	case OP_EXEC:
 		do_request = pseudo_client_logging;
 		break;
+	case OP_CLOSEFROM:
+		/* no request needed */
+		startfd = fd;
+		if (pseudo_util_debug_fd > startfd)
+			startfd = pseudo_util_debug_fd + 1;
+		if (pseudo_localstate_dir_fd > startfd)
+			startfd = pseudo_localstate_dir_fd + 1;
+		if (pseudo_pwd_fd > startfd)
+			startfd = pseudo_pwd_fd + 1;
+		if (pseudo_grp_fd > startfd)
+			startfd = pseudo_grp_fd + 1;
+		if (connect_fd > startfd)
+			startfd = connect_fd + 1;
+		for (i = fd; i < startfd; ++i) {
+			if (i == pseudo_util_debug_fd || i == pseudo_localstate_dir_fd || i == pseudo_pwd_fd ||
+					i == pseudo_grp_fd || i == connect_fd)
+				continue;
+			pseudo_client_close(i);
+			close(i);
+		}
+		pseudo_client_closefrom(startfd);
+		/* tell the caller to close from startfd instead of fd */
+		result = &msg;
+		msg.fd = startfd;
+		do_request = 0;
+		break;
 	case OP_CLOSE:
 		/* no request needed */
 		if (fd >= 0) {
@@ -1982,7 +2026,7 @@ pseudo_client_op(pseudo_op_t op, int access, int fd, int dirfd, const char *path
 		break;
 	}
 	/* result can only be set when PSEUDO_XATTRDB resulted in a
-	 * successful store to or read from the local database.
+	 * successful store to or read from the local database or for OP_CLOSEFROM.
 	 */
 	if (do_request && !result) {
 #ifdef PSEUDO_PROFILING
