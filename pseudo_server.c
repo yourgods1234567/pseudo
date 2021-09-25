@@ -568,6 +568,7 @@ serve_client(int i) {
 				}
 				in->pathlen = (s - response_path) + 1;
 				/* exit quickly once clients go away, though */
+                               pdb_backup();
 				pseudo_server_timeout = 3;
 			} else {
 				in->type = PSEUDO_MSG_ACK;

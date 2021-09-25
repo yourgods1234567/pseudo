@@ -399,7 +399,7 @@ signed_ino(ino_t ino) {
 
 #ifdef USE_MEMORY_DB
 
-static void
+void
 pdb_backup() {
         sqlite3_backup *pBackup;
         /* no point in doing this if we don't have a database to back up,

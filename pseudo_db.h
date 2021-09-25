@@ -26,6 +26,7 @@ typedef struct {
 	char *program;
 } log_entry;
 
+extern void pdb_backup(void);
 extern int pdb_maybe_backup(void);
 extern int pdb_cancel_unlink_file(pseudo_msg_t *msg);
 extern int pdb_did_unlink_file(char *path, pseudo_msg_t *msg, int deleting);
