@@ -13,6 +13,7 @@ int mknodat(int dirfd, const char *path, mode_t mode, dev_t dev); /* real_func=p
 int __xmknod(int ver, const char *path, mode_t mode, dev_t *dev); /* flags=AT_SYMLINK_NOFOLLOW */
 int __xmknodat(int ver, int dirfd, const char *path, mode_t mode, dev_t *dev); /* flags=AT_SYMLINK_NOFOLLOW */
 int fcntl(int fd, int cmd, ...{struct flock *lock});  /* noignore_path=1 */
+int fcntl64(int fd, int cmd, ...{struct flock *lock});  /* noignore_path=1 */
 # just so we know the inums of symlinks
 char *canonicalize_file_name(const char *filename);
 int eaccess(const char *path, int mode);
