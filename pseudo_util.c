@@ -827,12 +827,21 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 		return 0;
 	}
 	newpathlen = pseudo_path_max();
+	pathlen = strlen(path);
+	/* Crazy shell code (e.g. libtool) can pass in a command pipeline as a path which exceeds the max path
+	 * length the system can support (6000+ chars). This will fail in libc or the syscall but if we don't
+	 * do something here, we'd segfault before it can do that. Leave path unchanged and let libc deal 
+	 * with it. 
+	 */
+	if ((pathlen + baselen) >= newpathlen) {
+		return path;
+	}
 	if (!pathbufs[pathbuf]) {
 		pathbufs[pathbuf] = malloc(newpathlen);
 	}
 	newpath = pathbufs[pathbuf];
 	pathbuf = (pathbuf + 1) % PATHBUFS;
-	pathlen = strlen(path);
+
 	/* a trailing slash has special meaning, but processing
 	 * trailing slashes is expensive.
 	 */
