@@ -29,11 +29,6 @@
 #include "pseudo_ipc.h"
 #include "pseudo_db.h"
 
-/* O_PATH is defined in glibc 2.16 and later only */
-#ifndef O_PATH
-#define O_PATH          010000000
-#endif
-
 struct pseudo_variables {
 	char *key;
 	size_t key_len;
@@ -683,18 +678,6 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 	 */
 	if (!leave_this && is_dir) {
 		int is_link = S_ISLNK(buf->st_mode);
-
-		/* do not expand symlinks in the proc filesystem, since they may not be real
-		 * check if newpath starts with "/proc/"
-		 * strlen of "/proc/" = 6
-		 */
-		if (is_link && (strncmp("/proc/", newpath, 6) == 0)) {
-			pseudo_debug(PDBGF_PATH | PDBGF_VERBOSE,
-				"pae: '%s' is procfs symlink, not expanding\n",
-				newpath);
-			is_link = 0;
-		}
-
 		if (link_recursion >= PSEUDO_MAX_LINK_RECURSION && is_link) {
 			pseudo_diag("link recursion too deep, not expanding path '%s'.\n", newpath);
 			is_link = 0;
