@@ -694,9 +694,9 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 			}
 			/* null-terminate buffer */
 			linkbuf[linklen] = '\0';
-			/* absolute symlink means start over! */
+			/* absolute symlink means go back to root */
 			if (*linkbuf == '/') {
-				current = newpath;
+				current = root;
 			} else {
 				/* point back at the end of the previous path... */
 				current -= (elen + 1);
@@ -794,8 +794,6 @@ static int pathbuf = 0;
  * path of baselen characters, presumed not to end in a /.  path is
  * the new path to be canonicalized.  The tricky part is that path may
  * contain symlinks, which must be resolved.
- * if "path" starts with a /, then it is an absolute path, and
- * we ignore base.
  */
 char *
 pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t baselen, size_t *lenp, int leave_last) {
