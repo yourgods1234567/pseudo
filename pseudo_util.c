@@ -679,7 +679,7 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 	if (!leave_this && is_dir) {
 		int is_link = S_ISLNK(buf->st_mode);
 		if (link_recursion >= PSEUDO_MAX_LINK_RECURSION && is_link) {
-			pseudo_diag("link recursion too deep, not expanding path '%s'.\n", newpath);
+			pseudo_debug(PDBGF_PATH, "link recursion too deep, not expanding path '%s'.\n", newpath);
 			is_link = 0;
 		}
 		if (is_link) {
@@ -689,7 +689,8 @@ pseudo_append_element(char *newpath, char *root, size_t allocated, char **pcurre
 
 			linklen = readlink(newpath, linkbuf, pseudo_path_max());
 			if (linklen == -1) {
-				pseudo_diag("uh-oh!  '%s' seems to be a symlink, but I can't read it.  Ignoring.", newpath);
+				pseudo_debug(PDBGF_PATH, "uh-oh!  '%s' seems to be a symlink, but I can't read it.  Ignoring.\n", newpath);
+				*pcurrent = current;
 				return 0;
 			}
 			/* null-terminate buffer */
