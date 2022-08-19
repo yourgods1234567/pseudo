@@ -3,5 +3,8 @@
  *
  */
 #include <sys/xattr.h>
-#include <attr/attributes.h>
 #include <stdint.h>
+
+#ifndef ENOATTR
+#define ENOATTR ENODATA
+#endif
