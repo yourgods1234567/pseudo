@@ -791,9 +791,9 @@ static char *pathbufs[PATHBUFS] = { 0 };
 static int pathbuf = 0;
 
 /* Canonicalize path.  "base", if present, is an already-canonicalized
- * path of baselen characters, presumed not to end in a /.  path is
- * the new path to be canonicalized.  The tricky part is that path may
- * contain symlinks, which must be resolved.
+ * path of baselen characters, presumed not to end in a / unless it is
+ * just "/".  path is the new path to be canonicalized.  The tricky part
+ * is that path may contain symlinks, which must be resolved.
  */
 char *
 pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t baselen, size_t *lenp, int leave_last) {
@@ -806,6 +806,12 @@ pseudo_fix_path(const char *base, const char *path, size_t rootlen, size_t basel
 	if (!path) {
 		pseudo_diag("can't fix empty path.\n");
 		return 0;
+	}
+	if (baselen == 1) {
+		baselen = 0;
+	}
+	if (rootlen == 1) {
+		rootlen = 0;
 	}
 	newpathlen = pseudo_path_max();
 	pathlen = strlen(path);
