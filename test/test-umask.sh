@@ -35,3 +35,4 @@ case $(mode b) in
 *)	exit 1;;
 esac
 
+rm a b

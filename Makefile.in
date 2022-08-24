@@ -55,6 +55,7 @@ GUTS=$(filter-out "$(GLOB_PATTERN)",$(wildcard $(GLOB_PATTERN)))
 
 SOURCES=$(wildcard *.c)
 OBJS=$(subst .c,.o,$(SOURCES))
+TESTS=$(patsubst %.c,%,$(wildcard test/*.c))
 
 SHOBJS=pseudo_tables.o pseudo_util.o
 DBOBJS=pseudo_db.o
@@ -74,13 +75,11 @@ TABLES=table_templates/pseudo_tables.c table_templates/pseudo_tables.h
 
 all: $(LIBPSEUDO) $(PSEUDO) $(PSEUDODB) $(PSEUDOLOG) $(PSEUDO_PROFILE)
 
-test: all | $(BIN) $(LIB) $(LOCALSTATE)
-	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-rename-fstat test/test-rename-fstat.c
-	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-openat test/test-openat.c
-	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-statx test/test-statx.c
-	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-fstat test/test-fstat.c
-	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o test/test-fcntl test/test-fcntl.c
-	@./run_tests.sh -v
+test: all $(TESTS) | $(BIN) $(LIB)
+	./run_tests.sh -v
+
+test/%: test/%.c
+	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o $@ $<
 
 install-lib: $(LIBPSEUDO)
 	mkdir -p $(DESTDIR)$(LIBDIR)
@@ -96,7 +95,7 @@ install-data:
 
 install: all install-lib install-bin install-data
 
-$(BIN) $(LIB) $(LOCALSTATE):
+$(BIN) $(LIB):
 	mkdir -p $@
 
 pseudo: $(PSEUDO)
@@ -170,7 +169,8 @@ pseudo_profile: Makefile pseudo_profile.c tables wrappers
 	$(CC) $(CFLAGS) $(CFLAGS_PSEUDO) -o pseudo_profile pseudo_profile.c
 
 clean:
-	rm -f *.o *.so $(PSEUDO) $(PSEUDODB) $(PSEUDOLOG) \
+	rm -f *.o $(LIBPSEUDO) $(PSEUDO) $(PSEUDODB) $(PSEUDOLOG) \
+		$(TESTS) \
 		pseudo_wrapfuncs.h pseudo_wrapfuncs.c \
 		pseudo_wrapper_table.c \
 		pseudo_tables.c pseudo_tables.h \
@@ -181,8 +181,8 @@ clean:
 	touch port_deps.mk func_deps.mk
 
 distclean: clean
-	rm -f Makefile
-	rm -rf ./$(BIN) ./$(LIB) ./$(LOCALSTATE)
+	rm -f Makefile port_deps.mk func_deps.mk
+	rm -rf ./$(BIN) ./$(LIB) ./$(LOCALSTATE) ./__pycache__
 	@echo "WARNING: Makefile has been removed.  You must reconfigure to do anything else."
 
 nuke: distclean

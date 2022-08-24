@@ -1,4 +1,5 @@
 *.o
+*.pyc
 Makefile
 libpseudo.so
 pseudo_wrapfuncs.*
@@ -14,3 +15,5 @@ pseudo_ports.h
 templatefile.pyc
 func_deps.mk
 port_deps.mk
+test/test-*
+!test/test-*.*
