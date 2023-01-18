@@ -682,7 +682,8 @@ pseudo_op(pseudo_msg_t *msg, const char *program, const char *tag, char **respon
 				}
 				break;
 			default:
-				if (strcmp(msg->path, path_by_ino)) {
+				/* Ignore NAMELESS FILE entries since those could be created by other threads on new files */
+				if (strcmp(msg->path, path_by_ino) && !strcmp(path_by_ino, "NAMELESS FILE")) {
 					mismatch = 1;
 				}
 				break;
