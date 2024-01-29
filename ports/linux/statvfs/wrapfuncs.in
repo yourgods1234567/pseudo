@@ -1,1 +1,2 @@
 int statvfs(const char *path, struct statvfs *buf);
+int statvfs64(const char *path, struct statvfs64 *buf);
