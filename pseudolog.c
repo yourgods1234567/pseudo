@@ -8,7 +8,8 @@
  */
 /* We need _XOPEN_SOURCE for strptime(), but if we define that,
  * we then don't get S_IFSOCK... _GNU_SOURCE turns on everything. */
-#define _GNU_SOURCE
+#define _DEFAULT_SOURCE
+#define _XOPEN_SOURCE
 
 #include <ctype.h>
 #include <limits.h>
@@ -374,7 +375,7 @@ plog_trait(int opt, char *string) {
 		pseudo_diag("invalid empty string for -%c\n", opt);
 		return 0;
 	}
-	new_trait = calloc(sizeof(*new_trait), 1);
+	new_trait = calloc(1, sizeof(*new_trait));
 	if (!new_trait) {
 		pseudo_diag("Couldn't allocate requested trait (for -%c %s)\n",
 			opt, string ? string : "<nil>");
