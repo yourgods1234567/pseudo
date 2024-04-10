@@ -1,16 +1,8 @@
 pseudo -- an analogue to sudo
 
-IMPORTANT NOTE:
+The official home for pseudo's git repository is:
 
-As of this writing, the official home for pseudo's git repository has
-changed to:
 	git://git.yoctoproject.org/pseudo
-
-The old site at:
-	https://github.com/wrpseudo/pseudo
-
-is no longer the "real" master, although I'll probably try to keep it in
-sync.
 
 OVERVIEW:
 
@@ -88,7 +80,6 @@ available for other people to look at.
 
 CONTACT:
 
-Discussions and patches should be directed at the openembedded-core mailing
-list at openembedded-core at lists.openembedded.org. More information at
-https://www.openembedded.org/wiki/Mailing_lists. Bugs should be filed with
-the Yocto project at https://bugzilla.yoctoproject.org/.
+Patches should be directed at the yocto-patches mailing list at yocto-patches
+at lists.yoctoproject.org.  Bugs should be filed with the Yocto project
+at https://bugzilla.yoctoproject.org/.
