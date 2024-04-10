@@ -1,8 +1,8 @@
-pseudo -- an analogue to sudo
+pseudo -- an analogue to sudo and an alternative to fakeroot
 
 The official home for pseudo's git repository is:
 
-	git://git.yoctoproject.org/pseudo
+	https://git.yoctoproject.org/pseudo
 
 OVERVIEW:
 
@@ -70,6 +70,7 @@ commentary.
 
 ACKNOWLEDGEMENTS:
 
+Peter Seebach:
 My various coworkers, both engineering and management, made this possible.
 While I did most of the actual typing, this code has benefitted greatly
 from detailed code reviews, excellent reproducers for bugs, and the
@@ -78,8 +79,19 @@ deal of fun, and I'm pretty happy that we're finally ready to make it
 available for other people to look at.
 
 
+MAINTAINERS:
+
+Richard Purdie
+Mark Hatle
+
+
 CONTACT:
 
 Patches should be directed at the yocto-patches mailing list at yocto-patches
-at lists.yoctoproject.org.  Bugs should be filed with the Yocto project
-at https://bugzilla.yoctoproject.org/.
+at lists.yoctoproject.org with [pseudo] in the subject line.  Bugs should be
+filed with the Yocto project at https://bugzilla.yoctoproject.org/.
+
+The repository can be configured to do this correctly with:
+
+  git config format.subjectprefix "pseudo] [PATCH"
+  git config sendemail.to yocto-patches@lists.yoctoproject.org
