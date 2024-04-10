@@ -28,9 +28,8 @@
 		return rc;
 	}
 	if (S_ISLNK(buf.st_mode)) {
-		/* we don't really support chmod of a symlink */
-		errno = ENOSYS;
-		return -1;
+		/* according to docs, "chmod on a symbolic link always succeeds and has no effect" */
+		return 0;
 	}
 	save_errno = errno;
 
